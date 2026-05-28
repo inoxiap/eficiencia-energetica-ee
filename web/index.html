@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e3263a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Trampas">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Trampas de condensado</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="icon" href="assets/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="splash" id="splash" aria-hidden="true">
+    <img src="assets/logo-white.png" alt="">
+  </div>
+
+  <main class="app-shell">
+    <header class="app-header">
+      <img src="assets/logo-white.png" alt="" class="header-logo">
+      <div>
+        <h1>Selección de trampa</h1>
+        <p>Dimensionamiento preliminar para trampas de condensado.</p>
+      </div>
+    </header>
+
+    <section class="control-section">
+      <label class="field-label" for="useSelect">Uso</label>
+      <select id="useSelect" class="select-control"></select>
+    </section>
+
+    <section id="recommendationPanel" class="info-panel is-hidden" aria-live="polite">
+      <div class="info-grid">
+        <div>
+          <span>Tipo de trampa</span>
+          <strong id="trapType"></strong>
+        </div>
+        <div>
+          <span>Condición típica</span>
+          <strong id="condition"></strong>
+        </div>
+      </div>
+      <div class="info-block">
+        <span>Observaciones</span>
+        <p id="observations"></p>
+      </div>
+    </section>
+
+    <section id="inputPanel" class="input-panel is-hidden">
+      <div class="panel-heading">
+        <h2>Valores disponibles</h2>
+      </div>
+
+      <label class="check-row">
+        <input type="checkbox" id="unknownCondensate">
+        <span>No conozco la cantidad de condensado</span>
+      </label>
+
+      <div id="directFields" class="fields-stack"></div>
+      <div id="indirectFields" class="fields-stack"></div>
+
+      <button id="calculateButton" class="primary-button" type="button">Calcular</button>
+    </section>
+
+    <section id="resultPanel" class="result-panel is-hidden" aria-live="polite">
+      <h2 id="resultTitle">Resultado</h2>
+      <div id="resultBody" class="result-body"></div>
+    </section>
+  </main>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

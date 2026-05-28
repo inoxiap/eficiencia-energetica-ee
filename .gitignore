@@ -1,0 +1,29 @@
+# Gradle / Android
+.gradle/
+build/
+app/build/
+local.properties
+
+# Generated distribution artifacts
+dist/
+*.apk
+*.aab
+*.ap_
+
+# Web / local runtime
+node_modules/
+web/.chrome-profile/
+web/server.log
+web/server.err.log
+
+# Editor and OS noise
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
