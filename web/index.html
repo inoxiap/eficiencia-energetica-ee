@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#e3263a">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Trampas">
+  <meta name="apple-mobile-web-app-title" content="EE">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Trampas de condensado</title>
+  <title>Eficiencia Energética EE</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="icon" href="assets/icon-192.png">
@@ -19,55 +19,74 @@
   </div>
 
   <main class="app-shell">
-    <header class="app-header">
-      <img src="assets/logo-white.png" alt="" class="header-logo">
-      <div>
-        <h1>Selección de trampa</h1>
-        <p>Dimensionamiento preliminar para trampas de condensado.</p>
-      </div>
-    </header>
-
-    <section class="control-section">
-      <label class="field-label" for="useSelect">Uso</label>
-      <select id="useSelect" class="select-control"></select>
-    </section>
-
-    <section id="recommendationPanel" class="info-panel is-hidden" aria-live="polite">
-      <div class="info-grid">
+    <section id="homeScreen" class="screen">
+      <header class="app-header">
+        <img src="assets/logo-white.png" alt="" class="header-logo">
         <div>
-          <span>Tipo de trampa</span>
-          <strong id="trapType"></strong>
+          <h1>Eficiencia Energética EE</h1>
+          <p>Herramientas de campo para gestión energética.</p>
         </div>
+      </header>
+
+      <section class="module-section">
+        <h2>Módulos</h2>
+        <button id="openTrapModule" class="primary-button module-button" type="button">Dimensionamiento de trampas</button>
+      </section>
+    </section>
+
+    <section id="trapScreen" class="screen is-hidden">
+      <button id="backHomeButton" class="back-button" type="button">Volver a EE</button>
+
+      <header class="app-header">
+        <img src="assets/logo-white.png" alt="" class="header-logo">
         <div>
-          <span>Condición típica</span>
-          <strong id="condition"></strong>
+          <h1>Selección de trampa</h1>
+          <p>Dimensionamiento preliminar para trampas de condensado.</p>
         </div>
-      </div>
-      <div class="info-block">
-        <span>Observaciones</span>
-        <p id="observations"></p>
-      </div>
-    </section>
+      </header>
 
-    <section id="inputPanel" class="input-panel is-hidden">
-      <div class="panel-heading">
-        <h2>Valores disponibles</h2>
-      </div>
+      <section class="control-section">
+        <label class="field-label" for="useSelect">Uso</label>
+        <select id="useSelect" class="select-control"></select>
+      </section>
 
-      <label class="check-row">
-        <input type="checkbox" id="unknownCondensate">
-        <span>No conozco la cantidad de condensado</span>
-      </label>
+      <section id="recommendationPanel" class="info-panel is-hidden" aria-live="polite">
+        <div class="info-grid">
+          <div>
+            <span>Tipo de trampa</span>
+            <strong id="trapType"></strong>
+          </div>
+          <div>
+            <span>Condición típica</span>
+            <strong id="condition"></strong>
+          </div>
+        </div>
+        <div class="info-block">
+          <span>Observaciones</span>
+          <p id="observations"></p>
+        </div>
+      </section>
 
-      <div id="directFields" class="fields-stack"></div>
-      <div id="indirectFields" class="fields-stack"></div>
+      <section id="inputPanel" class="input-panel is-hidden">
+        <div class="panel-heading">
+          <h2>Valores disponibles</h2>
+        </div>
 
-      <button id="calculateButton" class="primary-button" type="button">Calcular</button>
-    </section>
+        <label class="check-row">
+          <input type="checkbox" id="unknownCondensate">
+          <span>No conozco la cantidad de condensado</span>
+        </label>
 
-    <section id="resultPanel" class="result-panel is-hidden" aria-live="polite">
-      <h2 id="resultTitle">Resultado</h2>
-      <div id="resultBody" class="result-body"></div>
+        <div id="directFields" class="fields-stack"></div>
+        <div id="indirectFields" class="fields-stack"></div>
+
+        <button id="calculateButton" class="primary-button" type="button">Calcular</button>
+      </section>
+
+      <section id="resultPanel" class="result-panel is-hidden" aria-live="polite">
+        <h2 id="resultTitle">Resultado</h2>
+        <div id="resultBody" class="result-body"></div>
+      </section>
     </section>
   </main>
 

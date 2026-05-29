@@ -1,4 +1,4 @@
-const CACHE_NAME = "trampas-condensado-pwa-v1";
+const CACHE_NAME = "eficiencia-energetica-pwa-v2";
 const APP_SHELL = [
   "./",
   "index.html",

@@ -1,11 +1,12 @@
-# Trampas de condensado
+# Eficiencia Energetica EE
 
-Aplicacion preliminar para seleccionar el tipo de trampa de condensado por uso y estimar una capacidad minima en kg/h. Incluye version Android nativa y version web/PWA para iPhone o navegador.
+Aplicacion movil/web para herramientas de campo orientadas a eficiencia energetica. El primer modulo disponible es dimensionamiento preliminar de trampas de condensado por uso, con estimacion de capacidad minima en kg/h. Incluye version Android nativa y version web/PWA para iPhone o navegador.
 
 ## Estado actual
 
 - Splash de 1 segundo con logo sobre fondo de marca.
-- Pantalla principal con selector de uso, sin seleccion por defecto.
+- Pantalla principal general de Eficiencia Energetica EE.
+- Modulo inicial "Dimensionamiento de trampas" con selector de uso, sin seleccion por defecto.
 - Tipo de trampa recomendado, condicion tipica y observaciones cargadas automaticamente.
 - Rueda numerica para ingresar el caudal de condensado conocido en L/min.
 - Casilla "No conozco la cantidad de condensado" para cambiar a calculo indirecto.

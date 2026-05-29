@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         loadRules();
         showSplash();
-        new Handler(Looper.getMainLooper()).postDelayed(this::showMainScreen, 1000);
+        new Handler(Looper.getMainLooper()).postDelayed(this::showHomeScreen, 1000);
     }
 
     private void showSplash() {
@@ -111,7 +111,85 @@ public class MainActivity extends Activity {
         setContentView(root);
     }
 
-    private void showMainScreen() {
+    private void showHomeScreen() {
+        getWindow().setStatusBarColor(COLOR_PAGE);
+        getWindow().setNavigationBarColor(Color.WHITE);
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setBackgroundColor(COLOR_PAGE);
+        scrollView.setFillViewport(true);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(18), dp(18), dp(18), dp(28));
+        scrollView.addView(root);
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(14), dp(14), dp(14), dp(14));
+        header.setBackground(new android.graphics.drawable.GradientDrawable() {{
+            setColor(COLOR_BRAND_RED);
+            setCornerRadius(dp(8));
+        }});
+
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.splash_logo);
+        logo.setAdjustViewBounds(true);
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(dp(44), dp(48));
+        header.addView(logo, logoParams);
+
+        LinearLayout headerText = new LinearLayout(this);
+        headerText.setOrientation(LinearLayout.VERTICAL);
+        headerText.setPadding(dp(14), 0, 0, 0);
+
+        TextView title = new TextView(this);
+        title.setText("Eficiencia Energética EE");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(24);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        headerText.addView(title);
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText("Herramientas de campo para gestión energética.");
+        subtitle.setTextColor(Color.argb(220, 255, 255, 255));
+        subtitle.setTextSize(13);
+        subtitle.setPadding(0, dp(4), 0, 0);
+        headerText.addView(subtitle);
+
+        header.addView(headerText, new LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                1
+        ));
+        root.addView(header, matchWrap());
+
+        TextView sectionTitle = new TextView(this);
+        sectionTitle.setText("Módulos");
+        sectionTitle.setTextColor(COLOR_TEXT);
+        sectionTitle.setTextSize(18);
+        sectionTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        sectionTitle.setPadding(0, dp(22), 0, dp(10));
+        root.addView(sectionTitle);
+
+        Button trapSizingButton = new Button(this);
+        trapSizingButton.setText("Dimensionamiento de trampas");
+        trapSizingButton.setTextColor(Color.WHITE);
+        trapSizingButton.setBackgroundColor(COLOR_BRAND_RED);
+        trapSizingButton.setAllCaps(false);
+        trapSizingButton.setTextSize(16);
+        trapSizingButton.setOnClickListener(v -> showTrapSizingScreen());
+        root.addView(trapSizingButton, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(54)
+        ));
+
+        setContentView(scrollView);
+    }
+
+    private void showTrapSizingScreen() {
         getWindow().setStatusBarColor(COLOR_PAGE);
         getWindow().setNavigationBarColor(Color.WHITE);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
@@ -124,6 +202,19 @@ public class MainActivity extends Activity {
         contentLayout.setOrientation(LinearLayout.VERTICAL);
         contentLayout.setPadding(dp(18), dp(18), dp(18), dp(28));
         scrollView.addView(contentLayout);
+
+        Button backButton = new Button(this);
+        backButton.setText("Volver a EE");
+        backButton.setTextColor(COLOR_PRIMARY_DARK);
+        backButton.setBackgroundColor(Color.TRANSPARENT);
+        backButton.setAllCaps(false);
+        backButton.setTextSize(14);
+        backButton.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        backButton.setOnClickListener(v -> showHomeScreen());
+        contentLayout.addView(backButton, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(44)
+        ));
 
         TextView title = new TextView(this);
         title.setText("Selección de trampa");

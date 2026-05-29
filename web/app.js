@@ -27,6 +27,10 @@ const state = {
 
 const elements = {
   splash: document.getElementById("splash"),
+  homeScreen: document.getElementById("homeScreen"),
+  trapScreen: document.getElementById("trapScreen"),
+  openTrapModule: document.getElementById("openTrapModule"),
+  backHomeButton: document.getElementById("backHomeButton"),
   useSelect: document.getElementById("useSelect"),
   recommendationPanel: document.getElementById("recommendationPanel"),
   trapType: document.getElementById("trapType"),
@@ -51,11 +55,14 @@ window.addEventListener("load", () => {
 document.addEventListener("DOMContentLoaded", () => {
   populateUseSelect();
   bindEvents();
-  resetSelection();
+  showHomeScreen();
   registerServiceWorker();
 });
 
 function bindEvents() {
+  elements.openTrapModule.addEventListener("click", showTrapScreen);
+  elements.backHomeButton.addEventListener("click", showHomeScreen);
+
   elements.useSelect.addEventListener("change", () => {
     const selectedName = elements.useSelect.value;
     state.selectedRule = rules.find((rule) => rule.name === selectedName) || null;
@@ -68,6 +75,18 @@ function bindEvents() {
   });
 
   elements.calculateButton.addEventListener("click", calculate);
+}
+
+function showHomeScreen() {
+  elements.homeScreen.classList.remove("is-hidden");
+  elements.trapScreen.classList.add("is-hidden");
+  resetSelection();
+}
+
+function showTrapScreen() {
+  elements.homeScreen.classList.add("is-hidden");
+  elements.trapScreen.classList.remove("is-hidden");
+  resetSelection();
 }
 
 function populateUseSelect() {
@@ -94,6 +113,7 @@ function populateUseSelect() {
 function resetSelection() {
   state.selectedRule = null;
   elements.useSelect.value = "";
+  elements.unknownCondensate.checked = false;
   elements.recommendationPanel.classList.add("is-hidden");
   elements.inputPanel.classList.add("is-hidden");
   elements.resultPanel.classList.add("is-hidden");

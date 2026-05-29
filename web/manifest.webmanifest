@@ -1,7 +1,7 @@
 {
-  "name": "Trampas de condensado",
-  "short_name": "Trampas",
-  "description": "Selección preliminar de trampas de condensado por uso.",
+  "name": "Eficiencia Energética EE",
+  "short_name": "EE",
+  "description": "Herramientas de campo para gestión energética.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
