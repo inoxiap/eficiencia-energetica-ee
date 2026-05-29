@@ -4,6 +4,11 @@ build/
 app/build/
 local.properties
 
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
 # Generated distribution artifacts
 dist/
 *.apk

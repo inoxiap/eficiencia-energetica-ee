@@ -4,6 +4,8 @@ Aplicacion movil/web para herramientas de campo orientadas a eficiencia energeti
 
 ## Estado actual
 
+La app principal esta migrandose a Flutter en `ee_flutter/` para poder correr en Android y Web desde una sola base. La version PWA original queda en `web/` como respaldo historico mientras terminamos la transicion.
+
 - Splash de 1 segundo con logo sobre fondo de marca.
 - Pantalla principal general de Eficiencia Energetica EE.
 - Modulo inicial "Dimensionamiento de trampas" con selector de uso, sin seleccion por defecto.
@@ -17,7 +19,7 @@ Aplicacion movil/web para herramientas de campo orientadas a eficiencia energeti
 
 ## Reporte de tuberia desnuda
 
-La PWA usa el preset unsigned de Cloudinary `ee_evidencias_unsigned` del cloud `dovufh5wv` para subir la foto de evidencia desde el navegador. Los reportes se guardan temporalmente en `localStorage` bajo la clave `eeBarePipeReports`; el siguiente paso natural sera sincronizarlos con Firebase cuando definamos usuarios y base de datos.
+Flutter y la PWA usan el preset unsigned de Cloudinary `ee_evidencias_unsigned` del cloud `dovufh5wv` para subir la foto de evidencia. En Flutter, la foto se sube a Cloudinary y los datos del reporte se guardan primero en almacenamiento local del dispositivo y luego intentan sincronizarse con Firestore.
 
 Campos del reporte:
 
@@ -31,7 +33,7 @@ Los datos tecnicos son opcionales. Si faltan diametro, presion o longitud, el re
 
 ## Panel administrador
 
-El panel administrador suma los reportes locales y muestra:
+El panel administrador suma los reportes disponibles. En Flutter lee Firestore cuando esta disponible y mezcla esos datos con el respaldo local del dispositivo.
 
 - Numero de reportes.
 - Calor disipado en kW.
@@ -85,7 +87,47 @@ El campo "Tiempo de calentamiento" tambien usa escala por tramos: hasta 60 min e
 - Para distribuidor de vapor secundario se estima una capacidad probable de vapor por diametro, presion y velocidad de referencia; luego se toma 1% como drenaje tipico de linea y se compara contra la perdida superficial.
 - La base tecnica y fuentes estan documentadas en `docs/base-tecnica.md`.
 
-## Compilar
+## Flutter
+
+La app Flutter esta en:
+
+```text
+ee_flutter/
+```
+
+Comandos utiles:
+
+```powershell
+cd ee_flutter
+flutter pub get
+flutter analyze
+flutter test
+flutter build web --no-web-resources-cdn --no-wasm-dry-run
+flutter build apk --debug
+```
+
+APK Flutter generado:
+
+```text
+ee_flutter/build/app/outputs/flutter-apk/app-debug.apk
+```
+
+Para revisar el build web local:
+
+```powershell
+cd ee_flutter
+node tool/serve_build.cjs
+```
+
+Abrir:
+
+```text
+http://127.0.0.1:5174/
+```
+
+Firebase fue configurado con FlutterFire para el proyecto `eficiencia-energetica-ee` en `ee_flutter/lib/firebase_options.dart`. Antes de usarlo con todos los mecanicos, se debe confirmar que Firestore este creado y que sus reglas permitan el flujo definido para reportes.
+
+## Android nativo anterior
 
 ```powershell
 .\gradlew.bat :app:assembleDebug
