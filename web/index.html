@@ -30,7 +30,107 @@
 
       <section class="module-section">
         <h2>Módulos</h2>
-        <button id="openTrapModule" class="primary-button module-button" type="button">Dimensionamiento de trampas</button>
+        <div class="module-buttons">
+          <button id="openTrapModule" class="primary-button module-button" type="button">Dimensionamiento de trampas</button>
+          <button id="openBarePipeReport" class="primary-button module-button" type="button">Reporte de tubería desnuda</button>
+          <button id="openAdminPanel" class="secondary-button module-button" type="button">Panel administrador</button>
+        </div>
+      </section>
+    </section>
+
+    <section id="barePipeScreen" class="screen is-hidden">
+      <button id="backBarePipeHomeButton" class="back-button" type="button">Volver a EE</button>
+
+      <header class="app-header">
+        <img src="assets/logo-white.png" alt="" class="header-logo">
+        <div>
+          <h1>Reporte de tubería desnuda</h1>
+          <p>Evidencia de vapor o condensado sin aislamiento.</p>
+        </div>
+      </header>
+
+      <section class="report-panel">
+        <button id="capturePipePhoto" class="camera-button" type="button">
+          <span class="camera-symbol" aria-hidden="true"></span>
+          <span>Capturar evidencia</span>
+        </button>
+        <input id="pipePhotoInput" class="visually-hidden" type="file" accept="image/*" capture="environment">
+
+        <figure id="pipePhotoPreviewPanel" class="photo-preview is-hidden">
+          <img id="pipePhotoPreview" alt="Foto capturada de la tubería desnuda">
+        </figure>
+
+        <div class="report-fields">
+          <label class="field-label" for="pipeSection">Seleccione la sección</label>
+          <select id="pipeSection" class="select-control"></select>
+
+          <label class="field-label" for="pipeDiameter">Indique el diámetro de la tubería</label>
+          <select id="pipeDiameter" class="select-control"></select>
+
+          <label class="field-label" for="pipePressure">Indique la presión estimada de la línea</label>
+          <select id="pipePressure" class="select-control"></select>
+
+          <label class="field-label" for="pipeLength">Indique la longitud de la tubería desnuda</label>
+          <div class="unit-input">
+            <input id="pipeLength" type="text" inputmode="decimal" autocomplete="off" placeholder="0.0">
+            <span>m</span>
+          </div>
+        </div>
+
+        <button id="submitPipeReport" class="primary-button" type="button">Ingresar reporte</button>
+        <p id="pipeReportMessage" class="report-message is-hidden" aria-live="polite"></p>
+      </section>
+    </section>
+
+    <section id="adminScreen" class="screen is-hidden">
+      <button id="backAdminHomeButton" class="back-button" type="button">Volver a EE</button>
+
+      <header class="app-header">
+        <img src="assets/logo-white.png" alt="" class="header-logo">
+        <div>
+          <h1>Panel administrador</h1>
+          <p>Resumen local de pérdidas reportadas.</p>
+        </div>
+      </header>
+
+      <section class="dashboard-grid" aria-label="Indicadores principales">
+        <div class="metric-card">
+          <span>Reportes</span>
+          <strong id="adminTotalReports">0</strong>
+        </div>
+        <div class="metric-card">
+          <span>Calor disipado</span>
+          <strong id="adminTotalHeatKw">0 kW</strong>
+        </div>
+        <div class="metric-card">
+          <span>Energía mensual</span>
+          <strong id="adminTotalEnergyKwh">0 kWh</strong>
+        </div>
+        <div class="metric-card">
+          <span>Dinero perdido</span>
+          <strong id="adminTotalUsd">$0.00/mes</strong>
+        </div>
+      </section>
+
+      <section class="chart-panel">
+        <div class="panel-heading">
+          <h2>Calor reportado por sección</h2>
+        </div>
+        <div id="adminHeatChart" class="bar-chart"></div>
+      </section>
+
+      <section class="chart-panel">
+        <div class="panel-heading">
+          <h2>Dinero perdido por sección</h2>
+        </div>
+        <div id="adminMoneyChart" class="bar-chart"></div>
+      </section>
+
+      <section class="recent-panel">
+        <div class="panel-heading">
+          <h2>Últimos reportes</h2>
+        </div>
+        <div id="adminRecentReports" class="recent-list"></div>
       </section>
     </section>
 

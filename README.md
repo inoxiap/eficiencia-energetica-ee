@@ -1,17 +1,44 @@
 # Eficiencia Energetica EE
 
-Aplicacion movil/web para herramientas de campo orientadas a eficiencia energetica. El primer modulo disponible es dimensionamiento preliminar de trampas de condensado por uso, con estimacion de capacidad minima en kg/h. Incluye version Android nativa y version web/PWA para iPhone o navegador.
+Aplicacion movil/web para herramientas de campo orientadas a eficiencia energetica. Incluye dimensionamiento preliminar de trampas de condensado por uso y reporte de tuberia desnuda con evidencia fotografica. La version web/PWA permite registrar reportes y ver un panel local con calor y dinero perdido estimado.
 
 ## Estado actual
 
 - Splash de 1 segundo con logo sobre fondo de marca.
 - Pantalla principal general de Eficiencia Energetica EE.
 - Modulo inicial "Dimensionamiento de trampas" con selector de uso, sin seleccion por defecto.
+- Modulo "Reporte de tuberia desnuda" con captura/subida de evidencia a Cloudinary.
+- Panel administrador local, sin clave por ahora, con acumulados y graficas por seccion.
 - Tipo de trampa recomendado, condicion tipica y observaciones cargadas automaticamente.
 - Rueda numerica para ingresar el caudal de condensado conocido en L/min.
 - Casilla "No conozco la cantidad de condensado" para cambiar a calculo indirecto.
 - Calculo de carga de condensado directa o estimada, sin permitir ambos modos a la vez.
 - Resumen con tipo de trampa, carga estimada, factor de seguridad, capacidad minima sugerida y diametro preliminar.
+
+## Reporte de tuberia desnuda
+
+La PWA usa el preset unsigned de Cloudinary `ee_evidencias_unsigned` del cloud `dovufh5wv` para subir la foto de evidencia desde el navegador. Los reportes se guardan temporalmente en `localStorage` bajo la clave `eeBarePipeReports`; el siguiente paso natural sera sincronizarlos con Firebase cuando definamos usuarios y base de datos.
+
+Campos del reporte:
+
+- Foto de evidencia, requerida para ingresar el reporte.
+- Seccion: jaboneria, margarina, calderas, refineria, hidrogenacion, envase o confiteria.
+- Diametro de tuberia: 1/2", 3/4", 1", 1 1/4", 1 1/2", 2", 3", 4" o 6".
+- Presion estimada de la linea: 0 a 20 bar(g).
+- Longitud de tuberia desnuda en metros.
+
+Los datos tecnicos son opcionales. Si faltan diametro, presion o longitud, el reporte queda guardado con el calculo pendiente.
+
+## Panel administrador
+
+El panel administrador suma los reportes locales y muestra:
+
+- Numero de reportes.
+- Calor disipado en kW.
+- Energia mensual en kWh/mes.
+- Dinero perdido en USD/mes.
+- Graficas por seccion para calor y dinero perdido.
+- Ultimos reportes con miniatura de la evidencia.
 
 ## Usos y trampas
 
