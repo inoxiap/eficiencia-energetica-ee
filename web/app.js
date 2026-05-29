@@ -1,4 +1,4 @@
-const BRAND_VERSION = "0.2.0-pwa";
+const BRAND_VERSION = "0.2.2-pwa";
 
 const CONSTANTS = {
   palmOilSpecificHeatKjKgC: 2.0,
@@ -86,6 +86,8 @@ const SATURATION_TEMPERATURE_BY_PRESSURE = [
   [20, 214.9]
 ];
 
+const WHEEL_ITEM_HEIGHT = 44;
+
 const noDecimal = new Intl.NumberFormat("es-EC", { maximumFractionDigits: 0 });
 const oneDecimal = new Intl.NumberFormat("es-EC", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const twoDecimals = new Intl.NumberFormat("es-EC", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -97,6 +99,11 @@ const state = {
   fields: new Map(),
   pipePhotoFile: null,
   pipePhotoPreviewUrl: "",
+  pipeWheelValues: {
+    section: "",
+    diameter: "",
+    pressure: ""
+  },
   submittingReport: false
 };
 
@@ -129,9 +136,9 @@ const elements = {
   pipePhotoInput: document.getElementById("pipePhotoInput"),
   pipePhotoPreviewPanel: document.getElementById("pipePhotoPreviewPanel"),
   pipePhotoPreview: document.getElementById("pipePhotoPreview"),
-  pipeSection: document.getElementById("pipeSection"),
-  pipeDiameter: document.getElementById("pipeDiameter"),
-  pipePressure: document.getElementById("pipePressure"),
+  pipeSectionWheel: document.getElementById("pipeSectionWheel"),
+  pipeDiameterWheel: document.getElementById("pipeDiameterWheel"),
+  pipePressureWheel: document.getElementById("pipePressureWheel"),
   pipeLength: document.getElementById("pipeLength"),
   submitPipeReport: document.getElementById("submitPipeReport"),
   pipeReportMessage: document.getElementById("pipeReportMessage"),
@@ -234,31 +241,124 @@ function populateUseSelect() {
 }
 
 function populateBarePipeControls() {
-  elements.pipeSection.replaceChildren(
-    emptyOption("Sin dato"),
-    ...BARE_PIPE_SECTIONS.map((section) => option(section, section))
-  );
+  createWheelPicker(elements.pipeSectionWheel, "section", [
+    { value: "", label: "Sin dato" },
+    ...BARE_PIPE_SECTIONS.map((section) => ({ value: section, label: section }))
+  ]);
 
-  elements.pipeDiameter.replaceChildren(
-    emptyOption("Sin dato"),
-    ...BARE_PIPE_DIAMETERS.map((diameter) => option(diameter.label, diameter.label))
-  );
+  createWheelPicker(elements.pipeDiameterWheel, "diameter", [
+    { value: "", label: "Sin dato" },
+    ...BARE_PIPE_DIAMETERS.map((diameter) => ({ value: diameter.label, label: diameter.label }))
+  ]);
 
-  elements.pipePressure.replaceChildren(
-    emptyOption("Sin dato"),
-    ...SATURATION_TEMPERATURE_BY_PRESSURE.map(([pressure]) => option(String(pressure), `${pressure} bar(g)`))
-  );
+  createWheelPicker(elements.pipePressureWheel, "pressure", [
+    { value: "", label: "Sin dato" },
+    ...SATURATION_TEMPERATURE_BY_PRESSURE.map(([pressure]) => ({ value: String(pressure), label: `${pressure} bar(g)` }))
+  ]);
 }
 
-function emptyOption(label) {
-  return option("", label);
+function createWheelPicker(container, key, items) {
+  container.dataset.key = key;
+  container.dataset.selectedIndex = "0";
+  container.replaceChildren(...items.map((item, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "wheel-option";
+    button.dataset.value = item.value;
+    button.dataset.index = String(index);
+    button.setAttribute("role", "option");
+    button.setAttribute("aria-selected", index === 0 ? "true" : "false");
+    button.textContent = item.label;
+    button.addEventListener("click", () => selectWheelValue(key, item.value, "smooth"));
+    return button;
+  }));
+
+  container.addEventListener("scroll", () => updateWheelSelectionFromScroll(container));
+  container.addEventListener("keydown", (event) => handleWheelKeydown(event, key));
+  selectWheelValue(key, "", "auto");
 }
 
-function option(value, label) {
-  const element = document.createElement("option");
-  element.value = value;
-  element.textContent = label;
-  return element;
+function updateWheelSelectionFromScroll(container) {
+  if (container.dataset.ignoreScroll === "true") {
+    return;
+  }
+
+  window.clearTimeout(Number(container.dataset.scrollTimer || 0));
+  const timer = window.setTimeout(() => {
+    const items = wheelItems(container);
+    if (!items.length) {
+      return;
+    }
+
+    const index = clamp(Math.round(container.scrollTop / WHEEL_ITEM_HEIGHT), 0, items.length - 1);
+    setWheelSelectedIndex(container, index);
+  }, 90);
+  container.dataset.scrollTimer = String(timer);
+}
+
+function handleWheelKeydown(event, key) {
+  if (!["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", "Enter", " "].includes(event.key)) {
+    return;
+  }
+
+  event.preventDefault();
+  const container = wheelContainer(key);
+  const items = wheelItems(container);
+  const current = Number(container.dataset.selectedIndex || 0);
+  let next = current;
+
+  if (event.key === "ArrowDown") next += 1;
+  if (event.key === "ArrowUp") next -= 1;
+  if (event.key === "PageDown") next += 3;
+  if (event.key === "PageUp") next -= 3;
+  if (event.key === "Home") next = 0;
+  if (event.key === "End") next = items.length - 1;
+
+  next = clamp(next, 0, items.length - 1);
+  selectWheelValue(key, items[next].dataset.value, "smooth");
+}
+
+function selectWheelValue(key, value, behavior = "auto") {
+  const container = wheelContainer(key);
+  const items = wheelItems(container);
+  const index = Math.max(0, items.findIndex((item) => item.dataset.value === value));
+
+  container.dataset.ignoreScroll = "true";
+  container.scrollTo({ top: index * WHEEL_ITEM_HEIGHT, behavior });
+  setWheelSelectedIndex(container, index);
+
+  window.setTimeout(() => {
+    container.dataset.ignoreScroll = "false";
+  }, behavior === "smooth" ? 240 : 0);
+}
+
+function setWheelSelectedIndex(container, index) {
+  const items = wheelItems(container);
+  const selected = items[index];
+  if (!selected) {
+    return;
+  }
+
+  items.forEach((item, itemIndex) => {
+    const isSelected = itemIndex === index;
+    item.classList.toggle("is-selected", isSelected);
+    item.setAttribute("aria-selected", isSelected ? "true" : "false");
+  });
+
+  container.dataset.selectedIndex = String(index);
+  state.pipeWheelValues[container.dataset.key] = selected.dataset.value;
+}
+
+function wheelContainer(key) {
+  return {
+    section: elements.pipeSectionWheel,
+    diameter: elements.pipeDiameterWheel,
+    pressure: elements.pipePressureWheel
+  }[key];
+}
+
+function wheelItems(container) {
+  return Array.from(container.querySelectorAll(".wheel-option"));
 }
 
 function resetSelection() {
@@ -475,12 +575,13 @@ async function submitBarePipeReport() {
     return;
   }
 
-  const pressureBarG = elements.pipePressure.value === "" ? null : Number(elements.pipePressure.value);
+  const pressureValue = state.pipeWheelValues.pressure;
+  const pressureBarG = pressureValue === "" ? null : Number(pressureValue);
   const baseReport = {
     id: createReportId(),
     createdAt: new Date().toISOString(),
-    section: elements.pipeSection.value,
-    diameterLabel: elements.pipeDiameter.value,
+    section: state.pipeWheelValues.section,
+    diameterLabel: state.pipeWheelValues.diameter,
     pressureBarG,
     lengthMeters
   };
@@ -765,9 +866,9 @@ function resetBarePipeForm() {
   elements.pipePhotoInput.value = "";
   elements.pipePhotoPreview.removeAttribute("src");
   elements.pipePhotoPreviewPanel.classList.add("is-hidden");
-  elements.pipeSection.value = "";
-  elements.pipeDiameter.value = "";
-  elements.pipePressure.value = "";
+  selectWheelValue("section", "", "auto");
+  selectWheelValue("diameter", "", "auto");
+  selectWheelValue("pressure", "", "auto");
   elements.pipeLength.value = "";
   setBarePipeMessage("", "");
 }

@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="icon" href="assets/icon-192.png">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=0.2.2">
 </head>
 <body>
   <div class="splash" id="splash" aria-hidden="true">
@@ -61,14 +61,14 @@
         </figure>
 
         <div class="report-fields">
-          <label class="field-label" for="pipeSection">Seleccione la sección</label>
-          <select id="pipeSection" class="select-control"></select>
+          <span class="field-label" id="pipeSectionLabel">Seleccione la sección</span>
+          <div id="pipeSectionWheel" class="wheel-picker" role="listbox" aria-labelledby="pipeSectionLabel" tabindex="0"></div>
 
-          <label class="field-label" for="pipeDiameter">Indique el diámetro de la tubería</label>
-          <select id="pipeDiameter" class="select-control"></select>
+          <span class="field-label" id="pipeDiameterLabel">Indique el diámetro de la tubería</span>
+          <div id="pipeDiameterWheel" class="wheel-picker" role="listbox" aria-labelledby="pipeDiameterLabel" tabindex="0"></div>
 
-          <label class="field-label" for="pipePressure">Indique la presión estimada de la línea</label>
-          <select id="pipePressure" class="select-control"></select>
+          <span class="field-label" id="pipePressureLabel">Indique la presión estimada de la línea</span>
+          <div id="pipePressureWheel" class="wheel-picker" role="listbox" aria-labelledby="pipePressureLabel" tabindex="0"></div>
 
           <label class="field-label" for="pipeLength">Indique la longitud de la tubería desnuda</label>
           <div class="unit-input">
@@ -190,6 +190,6 @@
     </section>
   </main>
 
-  <script src="app.js" defer></script>
+  <script src="app.js?v=0.2.2" defer></script>
 </body>
 </html>

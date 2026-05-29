@@ -1,9 +1,9 @@
-const CACHE_NAME = "eficiencia-energetica-pwa-v3";
+const CACHE_NAME = "eficiencia-energetica-pwa-v5";
 const APP_SHELL = [
   "./",
   "index.html",
-  "styles.css",
-  "app.js",
+  "styles.css?v=0.2.2",
+  "app.js?v=0.2.2",
   "manifest.webmanifest",
   "assets/logo-white.png",
   "assets/icon-192.png",
