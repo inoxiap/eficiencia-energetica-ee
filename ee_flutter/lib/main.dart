@@ -1107,6 +1107,7 @@ class EmbeddedWheelPicker<T> extends StatefulWidget {
 
 class _EmbeddedWheelPickerState<T> extends State<EmbeddedWheelPicker<T>> {
   late FixedExtentScrollController _controller;
+  var _isSyncingController = false;
 
   int get _selectedIndex {
     final index = widget.options.indexWhere(
@@ -1126,7 +1127,9 @@ class _EmbeddedWheelPickerState<T> extends State<EmbeddedWheelPicker<T>> {
     super.didUpdateWidget(oldWidget);
     final next = _selectedIndex;
     if (_controller.hasClients && _controller.selectedItem != next) {
+      _isSyncingController = true;
       _controller.jumpToItem(next);
+      _isSyncingController = false;
     }
   }
 
@@ -1169,7 +1172,15 @@ class _EmbeddedWheelPickerState<T> extends State<EmbeddedWheelPicker<T>> {
               overAndUnderCenterOpacity: 0.42,
               onSelectedItemChanged: (index) {
                 final option = widget.options[index];
-                widget.onSelected(option.value);
+                if (_isSyncingController || option.value == widget.value) {
+                  return;
+                }
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted || option.value == widget.value) {
+                    return;
+                  }
+                  widget.onSelected(option.value);
+                });
               },
               childDelegate: ListWheelChildBuilderDelegate(
                 childCount: widget.options.length,
