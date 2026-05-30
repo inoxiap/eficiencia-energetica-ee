@@ -624,7 +624,7 @@ class _BarePipeReportScreenState extends State<BarePipeReportScreen> {
     setState(() {
       _isSubmitting = true;
       _messageType = MessageType.info;
-      _message = 'Subiendo evidencia y registrando reporte...';
+      _message = 'Subiendo evidencia...';
     });
 
     try {
@@ -648,6 +648,10 @@ class _BarePipeReportScreenState extends State<BarePipeReportScreen> {
         photoPublicId: upload.publicId,
         calculation: calculation,
       );
+      if (!mounted) return;
+      setState(() {
+        _message = 'Evidencia subida. Guardando reporte...';
+      });
       await widget.reportStore.saveReport(report);
 
       if (!mounted) return;

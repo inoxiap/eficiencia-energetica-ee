@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,16 +23,20 @@ class HybridReportStore implements ReportStore {
   const HybridReportStore({
     required this.localStore,
     required this.remoteStore,
+    this.remoteTimeout = const Duration(seconds: 10),
   });
 
   final ReportStore localStore;
   final ReportStore remoteStore;
+  final Duration remoteTimeout;
 
   @override
   Future<List<BarePipeReport>> loadReports() async {
     final localReports = await localStore.loadReports();
     try {
-      final remoteReports = await remoteStore.loadReports();
+      final remoteReports = await remoteStore.loadReports().timeout(
+        remoteTimeout,
+      );
       return _mergeReports(remoteReports, localReports);
     } catch (_) {
       return localReports;
@@ -42,10 +47,14 @@ class HybridReportStore implements ReportStore {
   Future<void> saveReport(BarePipeReport report) async {
     await localStore.saveReport(report);
     try {
-      await remoteStore.saveReport(report);
+      await remoteStore.saveReport(report).timeout(remoteTimeout);
+    } on TimeoutException {
+      throw const ReportSyncException(
+        'Reporte guardado en este telefono. Firebase no respondio a tiempo; revisa que Cloud Firestore este creado y habilitado.',
+      );
     } catch (error) {
       throw ReportSyncException(
-        'Reporte guardado en este telefono, pero Firebase no sincronizo: $error',
+        'Reporte guardado en este telefono. Firebase no sincronizo; revisa que Cloud Firestore este creado y habilitado.',
       );
     }
   }

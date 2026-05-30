@@ -15,6 +15,7 @@ class CloudinaryService {
   static const uploadPreset = 'ee_evidencias_unsigned';
   static const endpoint =
       'https://api.cloudinary.com/v1_1/$cloudName/image/upload';
+  static const uploadTimeout = Duration(seconds: 45);
 
   Future<CloudinaryUpload> uploadEvidence({
     required Uint8List bytes,
@@ -30,7 +31,7 @@ class CloudinaryService {
       ),
     );
 
-    final response = await request.send();
+    final response = await request.send().timeout(uploadTimeout);
     final body = await response.stream.bytesToString();
     final payload = _decodeJson(body);
 
