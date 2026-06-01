@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,9 +9,12 @@ import 'package:intl/intl.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'domain/bare_pipe.dart';
+import 'domain/boiler_consumption.dart';
 import 'domain/trap_sizing.dart';
 import 'firebase_options.dart';
 import 'services/cloudinary_service.dart';
+import 'services/consumption_store.dart';
+import 'services/deferred_firestore_consumption_store.dart';
 import 'services/deferred_firestore_report_store.dart';
 import 'services/report_store.dart';
 
@@ -29,11 +33,18 @@ Future<void> main() async {
   );
   firebaseReady.ignore();
   final localStore = LocalReportStore();
+  final localConsumptionStore = LocalConsumptionStore();
   runApp(
     EeApp(
       reportStore: HybridReportStore(
         localStore: localStore,
         remoteStore: DeferredFirestoreReportStore(firebaseReady: firebaseReady),
+      ),
+      consumptionStore: HybridConsumptionStore(
+        localStore: localConsumptionStore,
+        remoteStore: DeferredFirestoreConsumptionStore(
+          firebaseReady: firebaseReady,
+        ),
       ),
       cloudinaryService: CloudinaryService(),
     ),
@@ -43,11 +54,13 @@ Future<void> main() async {
 class EeApp extends StatelessWidget {
   const EeApp({
     required this.reportStore,
+    required this.consumptionStore,
     required this.cloudinaryService,
     super.key,
   });
 
   final ReportStore reportStore;
+  final ConsumptionStore consumptionStore;
   final CloudinaryService cloudinaryService;
 
   @override
@@ -83,6 +96,7 @@ class EeApp extends StatelessWidget {
       ),
       home: SplashGate(
         reportStore: reportStore,
+        consumptionStore: consumptionStore,
         cloudinaryService: cloudinaryService,
       ),
     );
@@ -92,11 +106,13 @@ class EeApp extends StatelessWidget {
 class SplashGate extends StatefulWidget {
   const SplashGate({
     required this.reportStore,
+    required this.consumptionStore,
     required this.cloudinaryService,
     super.key,
   });
 
   final ReportStore reportStore;
+  final ConsumptionStore consumptionStore;
   final CloudinaryService cloudinaryService;
 
   @override
@@ -129,6 +145,7 @@ class _SplashGateState extends State<SplashGate> {
       children: [
         HomeScreen(
           reportStore: widget.reportStore,
+          consumptionStore: widget.consumptionStore,
           cloudinaryService: widget.cloudinaryService,
         ),
         IgnorePointer(
@@ -155,11 +172,13 @@ class _SplashGateState extends State<SplashGate> {
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
     required this.reportStore,
+    required this.consumptionStore,
     required this.cloudinaryService,
     super.key,
   });
 
   final ReportStore reportStore;
+  final ConsumptionStore consumptionStore;
   final CloudinaryService cloudinaryService;
 
   @override
@@ -199,13 +218,29 @@ class HomeScreen extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         EeActionButton(
+          icon: Icons.local_fire_department_outlined,
+          label: 'Ingresar consumos',
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    ConsumptionEntryScreen(consumptionStore: consumptionStore),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+        EeActionButton(
           icon: Icons.bar_chart,
           label: 'Panel administrador',
           isPrimary: false,
           onPressed: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => AdminScreen(reportStore: reportStore),
+                builder: (_) => AdminScreen(
+                  reportStore: reportStore,
+                  consumptionStore: consumptionStore,
+                ),
               ),
             );
           },
@@ -710,98 +745,457 @@ class _BarePipeReportScreenState extends State<BarePipeReportScreen> {
   }
 }
 
+class ConsumptionEntryScreen extends StatefulWidget {
+  const ConsumptionEntryScreen({required this.consumptionStore, super.key});
+
+  final ConsumptionStore consumptionStore;
+
+  @override
+  State<ConsumptionEntryScreen> createState() => _ConsumptionEntryScreenState();
+}
+
+class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
+  final _fuelController = TextEditingController();
+  final _waterController = TextEditingController();
+  final _steamController = TextEditingController();
+  final _pinController = TextEditingController();
+  DateTime _date = DateTime.now();
+  TimeOfDay _time = TimeOfDay.now();
+  String _boilerName = boilerNames.first;
+  String _message = '';
+  MessageType _messageType = MessageType.info;
+  var _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _fuelController.dispose();
+    _waterController.dispose();
+    _steamController.dispose();
+    _pinController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final readsSteam = _boilerName == alfaLavalBoiler;
+    return AppShell(
+      children: [
+        const BackToHomeButton(),
+        const EeHeader(
+          title: 'Ingresar consumos',
+          subtitle: 'Registro horario de agua, combustible y vapor.',
+        ),
+        const SizedBox(height: 14),
+        InfoPanel(
+          children: [
+            Text('Fecha y hora', style: Theme.of(context).textTheme.labelBold),
+            const SizedBox(height: 8),
+            TwoColumnActions(
+              left: OutlinedButton.icon(
+                onPressed: _isSubmitting ? null : _pickDate,
+                icon: const Icon(Icons.calendar_month_outlined),
+                label: Text(_formatDateOnly(_date)),
+              ),
+              right: OutlinedButton.icon(
+                onPressed: _isSubmitting ? null : _pickTime,
+                icon: const Icon(Icons.schedule),
+                label: Text(_formatTimeOnly(_time)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Seleccione la caldera',
+              style: Theme.of(context).textTheme.labelBold,
+            ),
+            const SizedBox(height: 8),
+            EmbeddedWheelPicker<String>(
+              value: _boilerName,
+              options: boilerNames
+                  .map((name) => PickerOption(name, name))
+                  .toList(),
+              onSelected: _selectBoiler,
+            ),
+            const SizedBox(height: 16),
+            _buildNumberField(
+              controller: _fuelController,
+              label: 'Lectura total flujometro combustible',
+              suffix: 'unid.',
+            ),
+            const SizedBox(height: 14),
+            _buildNumberField(
+              controller: _waterController,
+              label: 'Lectura total flujometro agua',
+              suffix: 'unid.',
+            ),
+            const SizedBox(height: 14),
+            _buildNumberField(
+              controller: _steamController,
+              label: 'Lectura total vapor',
+              suffix: 'unid.',
+              enabled: readsSteam && !_isSubmitting,
+              hintText: readsSteam ? '0.0' : 'Solo Alfa Laval 1200',
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _pinController,
+              enabled: !_isSubmitting,
+              obscureText: true,
+              maxLength: 4,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                labelText: 'PIN calderista',
+                hintText: '0000',
+                counterText: '',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        EeActionButton(
+          icon: Icons.save_outlined,
+          label: _isSubmitting ? 'Guardando lectura...' : 'Ingresar consumo',
+          onPressed: _isSubmitting ? null : _submitReading,
+        ),
+        if (_message.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          MessageBox(type: _messageType, message: _message),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildNumberField({
+    required TextEditingController controller,
+    required String label,
+    required String suffix,
+    bool enabled = true,
+    String hintText = '0.0',
+  }) {
+    return TextField(
+      controller: controller,
+      enabled: enabled && !_isSubmitting,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]'))],
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hintText,
+        suffixText: suffix,
+      ),
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2024),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    setState(() => _date = picked);
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(context: context, initialTime: _time);
+    if (picked == null || !mounted) {
+      return;
+    }
+    setState(() => _time = picked);
+  }
+
+  void _selectBoiler(String value) {
+    setState(() {
+      _boilerName = value;
+      if (_boilerName != alfaLavalBoiler) {
+        _steamController.clear();
+      }
+    });
+  }
+
+  Future<void> _submitReading() async {
+    final fuelTotal = _parseRequiredNumber(_fuelController.text, 'combustible');
+    if (fuelTotal == null) {
+      return;
+    }
+    final waterTotal = _parseRequiredNumber(_waterController.text, 'agua');
+    if (waterTotal == null) {
+      return;
+    }
+
+    final steamText = _steamController.text.trim();
+    final steamTotal = steamText.isEmpty
+        ? null
+        : _parseRequiredNumber(steamText, 'vapor');
+    if (steamText.isNotEmpty && steamTotal == null) {
+      return;
+    }
+
+    final pin = _pinController.text.trim();
+    if (pin.length != 4) {
+      _setMessage(MessageType.error, 'Ingresa el PIN de 4 numeros.');
+      return;
+    }
+
+    final now = DateTime.now();
+    final recordedAt = DateTime(
+      _date.year,
+      _date.month,
+      _date.day,
+      _time.hour,
+      _time.minute,
+    );
+    final rawReading = BoilerReading(
+      id: _createReadingId(),
+      recordedAt: recordedAt,
+      createdAt: now,
+      boilerName: _boilerName,
+      fuelTotal: fuelTotal,
+      waterTotal: waterTotal,
+      steamTotal: _boilerName == alfaLavalBoiler ? steamTotal : null,
+      operatorPin: pin,
+      fuelConsumption: null,
+      waterConsumption: null,
+      steamConsumption: null,
+    );
+
+    setState(() {
+      _isSubmitting = true;
+      _messageType = MessageType.info;
+      _message = 'Calculando consumo y guardando lectura...';
+    });
+
+    BoilerReading? reading;
+    try {
+      final existing = await widget.consumptionStore.loadReadings();
+      reading = BoilerConsumptionCalculator.attachDeltas(rawReading, existing);
+      await widget.consumptionStore.saveReading(reading);
+      if (!mounted) {
+        return;
+      }
+      _finishSubmission(
+        MessageType.success,
+        'Lectura ingresada. ${_formatReadingDelta(reading)}',
+      );
+    } on ConsumptionSyncException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final detail = reading == null ? '' : '\n${_formatReadingDelta(reading)}';
+      _finishSubmission(MessageType.warning, '${error.message}$detail');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isSubmitting = false;
+        _messageType = MessageType.error;
+        _message = error.toString().replaceFirst('Exception: ', '').trim();
+      });
+    }
+  }
+
+  double? _parseRequiredNumber(String raw, String label) {
+    final normalized = raw.replaceAll(',', '.').trim();
+    final value = double.tryParse(normalized);
+    if (value == null || value < 0) {
+      _setMessage(
+        MessageType.error,
+        'La lectura de $label debe ser un numero mayor o igual a cero.',
+      );
+      return null;
+    }
+    return value;
+  }
+
+  void _finishSubmission(MessageType type, String message) {
+    setState(() {
+      _isSubmitting = false;
+      _date = DateTime.now();
+      _time = TimeOfDay.now();
+      _fuelController.clear();
+      _waterController.clear();
+      _steamController.clear();
+      _pinController.clear();
+      _messageType = type;
+      _message = message;
+    });
+  }
+
+  String _formatReadingDelta(BoilerReading reading) {
+    final parts = <String>[];
+    if (reading.fuelConsumption != null) {
+      parts.add('combustible ${Formats.two(reading.fuelConsumption!)} unid.');
+    }
+    if (reading.waterConsumption != null) {
+      parts.add('agua ${Formats.two(reading.waterConsumption!)} unid.');
+    }
+    if (reading.steamConsumption != null) {
+      parts.add('vapor ${Formats.two(reading.steamConsumption!)} unid.');
+    }
+    if (parts.isEmpty) {
+      return 'Es la primera lectura disponible para esta caldera; los consumos se calcularan desde la siguiente lectura.';
+    }
+    return 'Consumo calculado: ${parts.join(', ')}.';
+  }
+
+  void _setMessage(MessageType type, String message) {
+    setState(() {
+      _messageType = type;
+      _message = message;
+    });
+  }
+
+  String _createReadingId() {
+    final random = math.Random().nextInt(1 << 32).toRadixString(16);
+    return '${DateTime.now().millisecondsSinceEpoch}-$random';
+  }
+
+  String _formatDateOnly(DateTime value) {
+    final day = value.day.toString().padLeft(2, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    final year = value.year.toString();
+    return '$day/$month/$year';
+  }
+
+  String _formatTimeOnly(TimeOfDay value) {
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+}
+
 class AdminScreen extends StatefulWidget {
-  const AdminScreen({required this.reportStore, super.key});
+  const AdminScreen({
+    required this.reportStore,
+    required this.consumptionStore,
+    super.key,
+  });
 
   final ReportStore reportStore;
+  final ConsumptionStore consumptionStore;
 
   @override
   State<AdminScreen> createState() => _AdminScreenState();
 }
 
+enum AdminPanelTab { barePipe, consumption }
+
+enum ConsumptionScale { hour, day, week, month, year }
+
 class _AdminScreenState extends State<AdminScreen> {
   List<BarePipeReport> _reports = [];
-  var _isLoading = true;
+  List<BoilerReading> _readings = [];
+  var _isLoadingReports = true;
+  var _isLoadingReadings = true;
+  var _selectedTab = AdminPanelTab.barePipe;
+  var _consumptionScale = ConsumptionScale.hour;
+  var _selectedBoiler = '';
 
   @override
   void initState() {
     super.initState();
     _loadReports();
+    _loadReadings();
   }
 
   @override
   Widget build(BuildContext context) {
-    final totals = _AdminTotals.fromReports(_reports);
-    final groups = AdminGroup.fromReports(_reports);
-
     return AppShell(
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedTab.index,
+        onDestinationSelected: (index) {
+          setState(() => _selectedTab = AdminPanelTab.values[index]);
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.thermostat_outlined),
+            selectedIcon: Icon(Icons.thermostat),
+            label: 'Tuberias',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.local_fire_department_outlined),
+            selectedIcon: Icon(Icons.local_fire_department),
+            label: 'Consumos',
+          ),
+        ],
+      ),
       children: [
         const BackToHomeButton(),
         const EeHeader(
           title: 'Panel administrador',
-          subtitle: 'Resumen local de perdidas reportadas.',
+          subtitle: 'Indicadores de campo para eficiencia energetica.',
         ),
         const SizedBox(height: 12),
         Align(
           alignment: Alignment.centerRight,
           child: TextButton.icon(
-            onPressed: _isLoading ? null : _loadReports,
+            onPressed: _isCurrentTabLoading() ? null : _refreshCurrentTab,
             icon: const Icon(Icons.refresh),
             label: const Text('Actualizar'),
           ),
         ),
-        MetricGrid(
-          metrics: [
-            Metric('Reportes', Formats.noDecimal(_reports.length.toDouble())),
-            Metric('Calor disipado', '${Formats.two(totals.heatKw)} kW'),
-            Metric(
-              'Energia mensual',
-              '${Formats.noDecimal(totals.energyKwhMonth)} kWh',
-            ),
-            Metric('Dinero perdido', '${Formats.usd(totals.monthlyUsd)}/mes'),
-          ],
-        ),
-        const SizedBox(height: 14),
-        ChartPanel(
-          title: 'Calor reportado por seccion',
-          groups: groups,
-          valueFor: (group) => group.heatKw,
-          formatValue: (value) => '${Formats.two(value)} kW',
-          emptyText: 'Todavia no hay reportes ingresados.',
-        ),
-        const SizedBox(height: 14),
-        ChartPanel(
-          title: 'Dinero perdido por seccion',
-          groups: groups,
-          valueFor: (group) => group.monthlyUsd,
-          formatValue: (value) => '${Formats.usd(value)}/mes',
-          emptyText: 'Todavia no hay reportes ingresados.',
-        ),
-        const SizedBox(height: 14),
-        RecentReportsPanel(reports: _reports),
+        if (_selectedTab == AdminPanelTab.barePipe)
+          BarePipeAdminTab(reports: _reports, isLoading: _isLoadingReports)
+        else
+          ConsumptionAdminTab(
+            readings: _readings,
+            isLoading: _isLoadingReadings,
+            selectedBoiler: _selectedBoiler,
+            scale: _consumptionScale,
+            onBoilerChanged: (value) => setState(() => _selectedBoiler = value),
+            onScaleChanged: (value) =>
+                setState(() => _consumptionScale = value),
+          ),
       ],
     );
   }
 
+  bool _isCurrentTabLoading() {
+    return _selectedTab == AdminPanelTab.barePipe
+        ? _isLoadingReports
+        : _isLoadingReadings;
+  }
+
+  Future<void> _refreshCurrentTab() {
+    return _selectedTab == AdminPanelTab.barePipe
+        ? _loadReports()
+        : _loadReadings();
+  }
+
   Future<void> _loadReports() async {
-    setState(() => _isLoading = true);
+    setState(() => _isLoadingReports = true);
     final reports = await widget.reportStore.loadReports();
     if (!mounted) return;
     setState(() {
       _reports = reports;
-      _isLoading = false;
+      _isLoadingReports = false;
+    });
+  }
+
+  Future<void> _loadReadings() async {
+    setState(() => _isLoadingReadings = true);
+    final readings = await widget.consumptionStore.loadReadings();
+    if (!mounted) return;
+    setState(() {
+      _readings = readings;
+      _isLoadingReadings = false;
     });
   }
 }
 
 class AppShell extends StatelessWidget {
-  const AppShell({required this.children, super.key});
+  const AppShell({required this.children, this.bottomNavigationBar, super.key});
 
   final List<Widget> children;
+  final Widget? bottomNavigationBar;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      bottomNavigationBar: bottomNavigationBar,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -1012,6 +1406,34 @@ class TwoColumnInfo extends StatelessWidget {
             Expanded(child: children[0]),
             const SizedBox(width: 12),
             Expanded(child: children[1]),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class TwoColumnActions extends StatelessWidget {
+  const TwoColumnActions({required this.left, required this.right, super.key});
+
+  final Widget left;
+  final Widget right;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 430) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [left, const SizedBox(height: 10), right],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: left),
+            const SizedBox(width: 10),
+            Expanded(child: right),
           ],
         );
       },
@@ -1322,6 +1744,410 @@ class MessageBox extends StatelessWidget {
   }
 }
 
+class BarePipeAdminTab extends StatelessWidget {
+  const BarePipeAdminTab({
+    required this.reports,
+    required this.isLoading,
+    super.key,
+  });
+
+  final List<BarePipeReport> reports;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final totals = _AdminTotals.fromReports(reports);
+    final groups = AdminGroup.fromReports(reports);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (isLoading) ...[
+          const LinearProgressIndicator(minHeight: 3),
+          const SizedBox(height: 12),
+        ],
+        MetricGrid(
+          metrics: [
+            Metric('Reportes', Formats.noDecimal(reports.length.toDouble())),
+            Metric('Calor disipado', '${Formats.two(totals.heatKw)} kW'),
+            Metric(
+              'Energia mensual',
+              '${Formats.noDecimal(totals.energyKwhMonth)} kWh',
+            ),
+            Metric('Dinero perdido', '${Formats.usd(totals.monthlyUsd)}/mes'),
+          ],
+        ),
+        const SizedBox(height: 14),
+        ChartPanel(
+          title: 'Calor reportado por seccion',
+          groups: groups,
+          valueFor: (group) => group.heatKw,
+          formatValue: (value) => '${Formats.two(value)} kW',
+          emptyText: 'Todavia no hay reportes ingresados.',
+        ),
+        const SizedBox(height: 14),
+        ChartPanel(
+          title: 'Dinero perdido por seccion',
+          groups: groups,
+          valueFor: (group) => group.monthlyUsd,
+          formatValue: (value) => '${Formats.usd(value)}/mes',
+          emptyText: 'Todavia no hay reportes ingresados.',
+        ),
+        const SizedBox(height: 14),
+        RecentReportsPanel(reports: reports),
+      ],
+    );
+  }
+}
+
+class ConsumptionAdminTab extends StatelessWidget {
+  const ConsumptionAdminTab({
+    required this.readings,
+    required this.isLoading,
+    required this.selectedBoiler,
+    required this.scale,
+    required this.onBoilerChanged,
+    required this.onScaleChanged,
+    super.key,
+  });
+
+  final List<BoilerReading> readings;
+  final bool isLoading;
+  final String selectedBoiler;
+  final ConsumptionScale scale;
+  final ValueChanged<String> onBoilerChanged;
+  final ValueChanged<ConsumptionScale> onScaleChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final series = _ConsumptionSeries.fromReadings(
+      readings,
+      boilerName: selectedBoiler,
+      scale: scale,
+    );
+    final totals = _ConsumptionTotals.fromPoints(series.points);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (isLoading) ...[
+          const LinearProgressIndicator(minHeight: 3),
+          const SizedBox(height: 12),
+        ],
+        ConsumptionFilterPanel(
+          selectedBoiler: selectedBoiler,
+          scale: scale,
+          onBoilerChanged: onBoilerChanged,
+          onScaleChanged: onScaleChanged,
+        ),
+        const SizedBox(height: 14),
+        MetricGrid(
+          metrics: [
+            Metric(
+              'Lecturas',
+              Formats.noDecimal(series.readingCount.toDouble()),
+            ),
+            Metric('Combustible', '${Formats.two(totals.fuel)} unid.'),
+            Metric('Agua', '${Formats.two(totals.water)} unid.'),
+            Metric('Vapor', '${Formats.two(totals.steam)} unid.'),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _TimeSeriesChartPanel(
+          title: 'Consumo combustible vs tiempo',
+          points: series.points,
+          valueFor: (point) => point.fuel,
+          color: brandRed,
+          emptyText: 'Todavia no hay consumos calculados de combustible.',
+        ),
+        const SizedBox(height: 14),
+        _TimeSeriesChartPanel(
+          title: 'Consumo agua vs tiempo',
+          points: series.points,
+          valueFor: (point) => point.water,
+          color: tealColor,
+          emptyText: 'Todavia no hay consumos calculados de agua.',
+        ),
+        const SizedBox(height: 14),
+        RecentBoilerReadingsPanel(readings: series.filteredReadings),
+      ],
+    );
+  }
+}
+
+class ConsumptionFilterPanel extends StatelessWidget {
+  const ConsumptionFilterPanel({
+    required this.selectedBoiler,
+    required this.scale,
+    required this.onBoilerChanged,
+    required this.onScaleChanged,
+    super.key,
+  });
+
+  final String selectedBoiler;
+  final ConsumptionScale scale;
+  final ValueChanged<String> onBoilerChanged;
+  final ValueChanged<ConsumptionScale> onScaleChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoPanel(
+      children: [
+        Text(
+          'Filtros de consumo',
+          style: Theme.of(context).textTheme.titleMediumBold,
+        ),
+        const SizedBox(height: 12),
+        Text('Caldera', style: Theme.of(context).textTheme.smallLabel),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              label: const Text('Todas'),
+              selected: selectedBoiler.isEmpty,
+              onSelected: (_) => onBoilerChanged(''),
+            ),
+            for (final boiler in boilerNames)
+              ChoiceChip(
+                label: Text(boiler.replaceFirst('Caldera ', '')),
+                selected: selectedBoiler == boiler,
+                onSelected: (_) => onBoilerChanged(boiler),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Text('Escala de tiempo', style: Theme.of(context).textTheme.smallLabel),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final item in ConsumptionScale.values)
+              ChoiceChip(
+                label: Text(item.label),
+                selected: scale == item,
+                onSelected: (_) => onScaleChanged(item),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _TimeSeriesChartPanel extends StatelessWidget {
+  const _TimeSeriesChartPanel({
+    required this.title,
+    required this.points,
+    required this.valueFor,
+    required this.color,
+    required this.emptyText,
+  });
+
+  final String title;
+  final List<_ConsumptionPoint> points;
+  final double Function(_ConsumptionPoint point) valueFor;
+  final Color color;
+  final String emptyText;
+
+  @override
+  Widget build(BuildContext context) {
+    final visiblePoints = points.length > 18
+        ? points.sublist(points.length - 18)
+        : points;
+    final values = visiblePoints.map(valueFor).toList();
+    final maxValue = values.fold<double>(0, math.max);
+
+    return InfoPanel(
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleMediumBold),
+        const SizedBox(height: 12),
+        if (visiblePoints.isEmpty)
+          EmptyState(text: emptyText)
+        else if (maxValue <= 0)
+          EmptyState(
+            text:
+                'Hay lecturas guardadas, pero falta una lectura anterior para calcular consumos.',
+          )
+        else ...[
+          SizedBox(
+            height: 220,
+            child: CustomPaint(
+              painter: _TimeSeriesChartPainter(
+                values: values,
+                labels: visiblePoints
+                    .map((point) => point.label)
+                    .toList(growable: false),
+                color: color,
+              ),
+              child: const SizedBox.expand(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Ultimo valor: ${Formats.two(values.last)} unid.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: mutedColor,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _TimeSeriesChartPainter extends CustomPainter {
+  const _TimeSeriesChartPainter({
+    required this.values,
+    required this.labels,
+    required this.color,
+  });
+
+  final List<double> values;
+  final List<String> labels;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty) {
+      return;
+    }
+
+    const left = 48.0;
+    const top = 14.0;
+    const right = 12.0;
+    const bottom = 34.0;
+    final chart = Rect.fromLTRB(
+      left,
+      top,
+      size.width - right,
+      size.height - bottom,
+    );
+    final maxValue = values.fold<double>(0, math.max);
+    if (maxValue <= 0 || chart.width <= 0 || chart.height <= 0) {
+      return;
+    }
+
+    final gridPaint = Paint()
+      ..color = borderColor
+      ..strokeWidth = 1;
+    final axisPaint = Paint()
+      ..color = mutedColor.withValues(alpha: 0.34)
+      ..strokeWidth = 1.2;
+    final linePaint = Paint()
+      ..color = color
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final pointPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    final pointBorderPaint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    for (var index = 0; index <= 4; index += 1) {
+      final y = chart.top + chart.height * index / 4;
+      canvas.drawLine(Offset(chart.left, y), Offset(chart.right, y), gridPaint);
+    }
+    canvas.drawLine(chart.bottomLeft, chart.bottomRight, axisPaint);
+    canvas.drawLine(chart.bottomLeft, chart.topLeft, axisPaint);
+
+    final points = <Offset>[];
+    for (var index = 0; index < values.length; index += 1) {
+      final fraction = values.length == 1 ? 0.5 : index / (values.length - 1);
+      final x = chart.left + chart.width * fraction;
+      final y = chart.bottom - chart.height * (values[index] / maxValue);
+      points.add(Offset(x, y));
+    }
+
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (final point in points.skip(1)) {
+      path.lineTo(point.dx, point.dy);
+    }
+    canvas.drawPath(path, linePaint);
+
+    for (final point in points) {
+      canvas.drawCircle(point, 4.2, pointPaint);
+      canvas.drawCircle(point, 4.2, pointBorderPaint);
+    }
+
+    _drawText(canvas, Offset(0, chart.top - 5), Formats.two(maxValue), 11);
+    _drawText(
+      canvas,
+      Offset(0, chart.center.dy - 7),
+      Formats.two(maxValue / 2),
+      11,
+    );
+    _drawText(canvas, Offset(0, chart.bottom - 13), '0', 11);
+
+    final labelIndexes = _labelIndexes(values.length);
+    for (final index in labelIndexes) {
+      final point = points[index];
+      _drawCenteredText(
+        canvas,
+        Offset(point.dx, chart.bottom + 8),
+        labels[index],
+        11,
+      );
+    }
+  }
+
+  Set<int> _labelIndexes(int length) {
+    if (length <= 6) {
+      return {for (var index = 0; index < length; index += 1) index};
+    }
+    return {0, length ~/ 2, length - 1};
+  }
+
+  void _drawText(Canvas canvas, Offset offset, String text, double fontSize) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: mutedColor,
+          fontSize: fontSize,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+    )..layout(maxWidth: 44);
+    painter.paint(canvas, offset);
+  }
+
+  void _drawCenteredText(
+    Canvas canvas,
+    Offset anchor,
+    String text,
+    double fontSize,
+  ) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: mutedColor,
+          fontSize: fontSize,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textAlign: TextAlign.center,
+      textDirection: ui.TextDirection.ltr,
+    )..layout(maxWidth: 92);
+    painter.paint(canvas, Offset(anchor.dx - painter.width / 2, anchor.dy));
+  }
+
+  @override
+  bool shouldRepaint(covariant _TimeSeriesChartPainter oldDelegate) {
+    return oldDelegate.values != values ||
+        oldDelegate.labels != labels ||
+        oldDelegate.color != color;
+  }
+}
+
 class Metric {
   const Metric(this.label, this.value);
 
@@ -1600,6 +2426,117 @@ class RecentReportTile extends StatelessWidget {
   }
 }
 
+class RecentBoilerReadingsPanel extends StatelessWidget {
+  const RecentBoilerReadingsPanel({required this.readings, super.key});
+
+  final List<BoilerReading> readings;
+
+  @override
+  Widget build(BuildContext context) {
+    final sorted = [...readings]
+      ..sort((left, right) => right.recordedAt.compareTo(left.recordedAt));
+    return InfoPanel(
+      children: [
+        Text(
+          'Ultimas lecturas',
+          style: Theme.of(context).textTheme.titleMediumBold,
+        ),
+        const SizedBox(height: 12),
+        if (sorted.isEmpty)
+          const EmptyState(
+            text:
+                'Las lecturas de caldera apareceran aqui cuando se ingresen consumos.',
+          )
+        else
+          for (final reading in sorted.take(8)) ...[
+            RecentBoilerReadingTile(reading: reading),
+            const Divider(height: 18),
+          ],
+      ],
+    );
+  }
+}
+
+class RecentBoilerReadingTile extends StatelessWidget {
+  const RecentBoilerReadingTile({required this.reading, super.key});
+
+  final BoilerReading reading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: brandRed.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.local_fire_department, color: brandRed),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                reading.boilerName,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '${Formats.date(reading.recordedAt)} - PIN ${reading.operatorPin}',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: mutedColor),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _formatReadingTotals(reading),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _formatReadingConsumption(reading),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatReadingTotals(BoilerReading reading) {
+    final parts = [
+      'Comb. total ${Formats.two(reading.fuelTotal)}',
+      'Agua total ${Formats.two(reading.waterTotal)}',
+    ];
+    if (reading.steamTotal != null) {
+      parts.add('Vapor total ${Formats.two(reading.steamTotal!)}');
+    }
+    return parts.join(' - ');
+  }
+
+  String _formatReadingConsumption(BoilerReading reading) {
+    final parts = <String>[];
+    if (reading.fuelConsumption != null) {
+      parts.add('comb. ${Formats.two(reading.fuelConsumption!)}');
+    }
+    if (reading.waterConsumption != null) {
+      parts.add('agua ${Formats.two(reading.waterConsumption!)}');
+    }
+    if (reading.steamConsumption != null) {
+      parts.add('vapor ${Formats.two(reading.steamConsumption!)}');
+    }
+    return parts.isEmpty
+        ? 'Consumo pendiente de lectura anterior'
+        : 'Consumo: ${parts.join(' - ')} unid.';
+  }
+}
+
 class EmptyState extends StatelessWidget {
   const EmptyState({required this.text, super.key});
 
@@ -1693,6 +2630,173 @@ class _AdminGroupAccumulator {
   double monthlyUsd = 0;
 }
 
+class _ConsumptionSeries {
+  const _ConsumptionSeries({
+    required this.points,
+    required this.filteredReadings,
+    required this.readingCount,
+  });
+
+  factory _ConsumptionSeries.fromReadings(
+    List<BoilerReading> readings, {
+    required String boilerName,
+    required ConsumptionScale scale,
+  }) {
+    final sorted = [...readings]
+      ..sort((left, right) => left.recordedAt.compareTo(right.recordedAt));
+    final previousByBoiler = <String, BoilerReading>{};
+    final buckets = <DateTime, _ConsumptionBucket>{};
+    final filteredReadings = <BoilerReading>[];
+
+    for (final reading in sorted) {
+      final previous = previousByBoiler[reading.boilerName];
+      final fuel =
+          reading.fuelConsumption ??
+          _positiveDelta(reading.fuelTotal, previous?.fuelTotal);
+      final water =
+          reading.waterConsumption ??
+          _positiveDelta(reading.waterTotal, previous?.waterTotal);
+      final steam =
+          reading.steamConsumption ??
+          _positiveDelta(reading.steamTotal, previous?.steamTotal);
+      previousByBoiler[reading.boilerName] = reading;
+
+      if (boilerName.isNotEmpty && reading.boilerName != boilerName) {
+        continue;
+      }
+
+      filteredReadings.add(reading);
+      final bucketStart = _bucketFor(reading.recordedAt, scale);
+      final bucket = buckets.putIfAbsent(
+        bucketStart,
+        () => _ConsumptionBucket(bucketStart),
+      );
+      bucket.count += 1;
+      bucket.fuel += fuel ?? 0;
+      bucket.water += water ?? 0;
+      bucket.steam += steam ?? 0;
+    }
+
+    final points = buckets.values
+        .map(
+          (bucket) => _ConsumptionPoint(
+            bucket: bucket.bucket,
+            label: _labelForBucket(bucket.bucket, scale),
+            count: bucket.count,
+            fuel: bucket.fuel,
+            water: bucket.water,
+            steam: bucket.steam,
+          ),
+        )
+        .toList();
+    points.sort((left, right) => left.bucket.compareTo(right.bucket));
+    filteredReadings.sort(
+      (left, right) => right.recordedAt.compareTo(left.recordedAt),
+    );
+
+    return _ConsumptionSeries(
+      points: points,
+      filteredReadings: filteredReadings,
+      readingCount: filteredReadings.length,
+    );
+  }
+
+  final List<_ConsumptionPoint> points;
+  final List<BoilerReading> filteredReadings;
+  final int readingCount;
+
+  static double? _positiveDelta(double? current, double? previous) {
+    if (current == null || previous == null) {
+      return null;
+    }
+    final delta = current - previous;
+    return delta < 0 ? null : delta;
+  }
+
+  static DateTime _bucketFor(DateTime value, ConsumptionScale scale) {
+    final local = value.toLocal();
+    return switch (scale) {
+      ConsumptionScale.hour => DateTime(
+        local.year,
+        local.month,
+        local.day,
+        local.hour,
+      ),
+      ConsumptionScale.day => DateTime(local.year, local.month, local.day),
+      ConsumptionScale.week => DateTime(
+        local.year,
+        local.month,
+        local.day,
+      ).subtract(Duration(days: local.weekday - 1)),
+      ConsumptionScale.month => DateTime(local.year, local.month),
+      ConsumptionScale.year => DateTime(local.year),
+    };
+  }
+
+  static String _labelForBucket(DateTime value, ConsumptionScale scale) {
+    return switch (scale) {
+      ConsumptionScale.hour => DateFormat('dd/MM HH:00', 'es_EC').format(value),
+      ConsumptionScale.day => DateFormat('dd/MM', 'es_EC').format(value),
+      ConsumptionScale.week =>
+        'Sem ${DateFormat('dd/MM', 'es_EC').format(value)}',
+      ConsumptionScale.month => DateFormat('MM/yyyy', 'es_EC').format(value),
+      ConsumptionScale.year => DateFormat('yyyy', 'es_EC').format(value),
+    };
+  }
+}
+
+class _ConsumptionBucket {
+  _ConsumptionBucket(this.bucket);
+
+  final DateTime bucket;
+  int count = 0;
+  double fuel = 0;
+  double water = 0;
+  double steam = 0;
+}
+
+class _ConsumptionPoint {
+  const _ConsumptionPoint({
+    required this.bucket,
+    required this.label,
+    required this.count,
+    required this.fuel,
+    required this.water,
+    required this.steam,
+  });
+
+  final DateTime bucket;
+  final String label;
+  final int count;
+  final double fuel;
+  final double water;
+  final double steam;
+}
+
+class _ConsumptionTotals {
+  const _ConsumptionTotals({
+    required this.fuel,
+    required this.water,
+    required this.steam,
+  });
+
+  factory _ConsumptionTotals.fromPoints(List<_ConsumptionPoint> points) {
+    var fuel = 0.0;
+    var water = 0.0;
+    var steam = 0.0;
+    for (final point in points) {
+      fuel += point.fuel;
+      water += point.water;
+      steam += point.steam;
+    }
+    return _ConsumptionTotals(fuel: fuel, water: water, steam: steam);
+  }
+
+  final double fuel;
+  final double water;
+  final double steam;
+}
+
 class Formats {
   static final _noDecimal = NumberFormat('#,##0', 'es_EC');
   static final _oneDecimal = NumberFormat('#,##0.0', 'es_EC');
@@ -1716,6 +2820,18 @@ class Formats {
     final hour = local.hour.toString().padLeft(2, '0');
     final minute = local.minute.toString().padLeft(2, '0');
     return '$day/$month/$year $hour:$minute';
+  }
+}
+
+extension ConsumptionScaleLabels on ConsumptionScale {
+  String get label {
+    return switch (this) {
+      ConsumptionScale.hour => 'Hora',
+      ConsumptionScale.day => 'Dia',
+      ConsumptionScale.week => 'Semana',
+      ConsumptionScale.month => 'Mes',
+      ConsumptionScale.year => 'Ano',
+    };
   }
 }
 
