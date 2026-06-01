@@ -45,6 +45,7 @@ Future<void> main() async {
         remoteStore: DeferredFirestoreConsumptionStore(
           firebaseReady: firebaseReady,
         ),
+        remoteTimeout: const Duration(seconds: 35),
       ),
       cloudinaryService: CloudinaryService(),
     ),
@@ -2647,14 +2648,19 @@ class _ConsumptionSeries {
 
   static String _labelForBucket(DateTime value, ConsumptionScale scale) {
     return switch (scale) {
-      ConsumptionScale.hour => DateFormat('dd/MM HH:00', 'es_EC').format(value),
-      ConsumptionScale.day => DateFormat('dd/MM', 'es_EC').format(value),
+      ConsumptionScale.hour =>
+        '${_twoDigits(value.day)}/${_twoDigits(value.month)} ${_twoDigits(value.hour)}:00',
+      ConsumptionScale.day =>
+        '${_twoDigits(value.day)}/${_twoDigits(value.month)}',
       ConsumptionScale.week =>
-        'Sem ${DateFormat('dd/MM', 'es_EC').format(value)}',
-      ConsumptionScale.month => DateFormat('MM/yyyy', 'es_EC').format(value),
-      ConsumptionScale.year => DateFormat('yyyy', 'es_EC').format(value),
+        'Sem ${_twoDigits(value.day)}/${_twoDigits(value.month)}',
+      ConsumptionScale.month =>
+        '${_twoDigits(value.month)}/${value.year.toString()}',
+      ConsumptionScale.year => value.year.toString(),
     };
   }
+
+  static String _twoDigits(int value) => value.toString().padLeft(2, '0');
 }
 
 class _ConsumptionBucket {

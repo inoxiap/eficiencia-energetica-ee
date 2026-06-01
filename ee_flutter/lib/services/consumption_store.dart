@@ -109,7 +109,7 @@ class LocalConsumptionStore implements ConsumptionStore {
     final readings = await loadReadings();
     final deduped = readings.where((item) => item.id != reading.id).toList();
     deduped.insert(0, reading);
-    final capped = deduped.take(2000).map((item) => item.toJson()).toList();
+    final capped = deduped.take(10000).map((item) => item.toJson()).toList();
     await prefs.setString(_key, jsonEncode(capped));
   }
 }

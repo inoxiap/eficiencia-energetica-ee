@@ -16,7 +16,7 @@ class FirestoreConsumptionStore implements ConsumptionStore {
   Future<List<BoilerReading>> loadReadings() async {
     final snapshot = await _readings
         .orderBy('recordedAt', descending: true)
-        .limit(2000)
+        .limit(10000)
         .get();
     return snapshot.docs.map((doc) {
       final data = doc.data();
