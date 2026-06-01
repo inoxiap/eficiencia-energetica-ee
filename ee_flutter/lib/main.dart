@@ -7,11 +7,13 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'domain/bare_pipe.dart';
 import 'domain/boiler_consumption.dart';
 import 'domain/trap_sizing.dart';
 import 'firebase_options.dart';
+import 'services/app_update_service.dart';
 import 'services/cloudinary_service.dart';
 import 'services/consumption_store.dart';
 import 'services/deferred_firestore_consumption_store.dart';
@@ -48,6 +50,7 @@ Future<void> main() async {
         remoteTimeout: const Duration(seconds: 35),
       ),
       cloudinaryService: CloudinaryService(),
+      updateService: AppUpdateService(firebaseReady: firebaseReady),
     ),
   );
 }
@@ -57,12 +60,14 @@ class EeApp extends StatelessWidget {
     required this.reportStore,
     required this.consumptionStore,
     required this.cloudinaryService,
+    required this.updateService,
     super.key,
   });
 
   final ReportStore reportStore;
   final ConsumptionStore consumptionStore;
   final CloudinaryService cloudinaryService;
+  final AppUpdateService updateService;
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +104,7 @@ class EeApp extends StatelessWidget {
         reportStore: reportStore,
         consumptionStore: consumptionStore,
         cloudinaryService: cloudinaryService,
+        updateService: updateService,
       ),
     );
   }
@@ -109,12 +115,14 @@ class SplashGate extends StatefulWidget {
     required this.reportStore,
     required this.consumptionStore,
     required this.cloudinaryService,
+    required this.updateService,
     super.key,
   });
 
   final ReportStore reportStore;
   final ConsumptionStore consumptionStore;
   final CloudinaryService cloudinaryService;
+  final AppUpdateService updateService;
 
   @override
   State<SplashGate> createState() => _SplashGateState();
@@ -122,6 +130,7 @@ class SplashGate extends StatefulWidget {
 
 class _SplashGateState extends State<SplashGate> {
   var _showSplash = true;
+  var _updateDialogShown = false;
   Timer? _timer;
 
   @override
@@ -132,6 +141,9 @@ class _SplashGateState extends State<SplashGate> {
         setState(() => _showSplash = false);
       }
     });
+    if (!widget.updateService.isDisabled) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdate());
+    }
   }
 
   @override
@@ -166,6 +178,25 @@ class _SplashGateState extends State<SplashGate> {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _checkForUpdate() async {
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    if (!mounted || _updateDialogShown) {
+      return;
+    }
+
+    final notice = await widget.updateService.checkForUpdate();
+    if (!mounted || notice == null || _updateDialogShown) {
+      return;
+    }
+
+    _updateDialogShown = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: !notice.forceUpdate,
+      builder: (context) => UpdateAvailableDialog(notice: notice),
     );
   }
 }
@@ -1662,6 +1693,100 @@ class MessageBox extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class UpdateAvailableDialog extends StatefulWidget {
+  const UpdateAvailableDialog({required this.notice, super.key});
+
+  final AppUpdateNotice notice;
+
+  @override
+  State<UpdateAvailableDialog> createState() => _UpdateAvailableDialogState();
+}
+
+class _UpdateAvailableDialogState extends State<UpdateAvailableDialog> {
+  String _message = '';
+  var _isOpening = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final notice = widget.notice;
+    final canOpenUpdateLink = _canOpenUpdateLink(notice.updateUrl);
+    return PopScope(
+      canPop: !notice.forceUpdate || !canOpenUpdateLink,
+      child: AlertDialog(
+        title: const Text('Actualizacion disponible'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(notice.message),
+            const SizedBox(height: 12),
+            Text(
+              'Instalada: ${notice.currentVersion}\nDisponible: ${notice.latestVersion}+${notice.latestBuildNumber}',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: mutedColor),
+            ),
+            if (_message.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                _message,
+                style: const TextStyle(
+                  color: brandRedDark,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          if (!notice.forceUpdate || !canOpenUpdateLink)
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Despues'),
+            ),
+          FilledButton.icon(
+            onPressed: _isOpening ? null : _openUpdateUrl,
+            icon: const Icon(Icons.open_in_new),
+            label: Text(_isOpening ? 'Abriendo...' : 'Actualizar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openUpdateUrl() async {
+    final updateUrl = widget.notice.updateUrl;
+    final uri = Uri.tryParse(updateUrl);
+    if (uri == null || !uri.hasScheme) {
+      setState(() {
+        _message =
+            'La ruta de actualizacion no esta configurada en Firebase todavia.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isOpening = true;
+      _message = '';
+    });
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isOpening = false);
+    if (!opened) {
+      setState(() {
+        _message = 'No pude abrir el enlace de actualizacion.';
+      });
+    }
+  }
+
+  static bool _canOpenUpdateLink(String updateUrl) {
+    final uri = Uri.tryParse(updateUrl);
+    return uri != null && uri.hasScheme;
   }
 }
 

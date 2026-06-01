@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:eficiencia_energetica_ee/main.dart';
+import 'package:eficiencia_energetica_ee/services/app_update_service.dart';
 import 'package:eficiencia_energetica_ee/services/cloudinary_service.dart';
 import 'package:eficiencia_energetica_ee/services/consumption_store.dart';
 import 'package:eficiencia_energetica_ee/services/report_store.dart';
@@ -12,6 +13,7 @@ void main() {
         reportStore: LocalReportStore(),
         consumptionStore: LocalConsumptionStore(),
         cloudinaryService: CloudinaryService(),
+        updateService: const AppUpdateService.disabled(),
       ),
     );
 
