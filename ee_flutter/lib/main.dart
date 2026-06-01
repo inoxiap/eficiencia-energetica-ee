@@ -759,8 +759,6 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
   final _waterController = TextEditingController();
   final _steamController = TextEditingController();
   final _pinController = TextEditingController();
-  DateTime _date = DateTime.now();
-  TimeOfDay _time = TimeOfDay.now();
   String _boilerName = boilerNames.first;
   String _message = '';
   MessageType _messageType = MessageType.info;
@@ -788,21 +786,6 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
         const SizedBox(height: 14),
         InfoPanel(
           children: [
-            Text('Fecha y hora', style: Theme.of(context).textTheme.labelBold),
-            const SizedBox(height: 8),
-            TwoColumnActions(
-              left: OutlinedButton.icon(
-                onPressed: _isSubmitting ? null : _pickDate,
-                icon: const Icon(Icons.calendar_month_outlined),
-                label: Text(_formatDateOnly(_date)),
-              ),
-              right: OutlinedButton.icon(
-                onPressed: _isSubmitting ? null : _pickTime,
-                icon: const Icon(Icons.schedule),
-                label: Text(_formatTimeOnly(_time)),
-              ),
-            ),
-            const SizedBox(height: 16),
             Text(
               'Seleccione la caldera',
               style: Theme.of(context).textTheme.labelBold,
@@ -885,27 +868,6 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
     );
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _date,
-      firstDate: DateTime(2024),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-    );
-    if (picked == null || !mounted) {
-      return;
-    }
-    setState(() => _date = picked);
-  }
-
-  Future<void> _pickTime() async {
-    final picked = await showTimePicker(context: context, initialTime: _time);
-    if (picked == null || !mounted) {
-      return;
-    }
-    setState(() => _time = picked);
-  }
-
   void _selectBoiler(String value) {
     setState(() {
       _boilerName = value;
@@ -940,16 +902,9 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
     }
 
     final now = DateTime.now();
-    final recordedAt = DateTime(
-      _date.year,
-      _date.month,
-      _date.day,
-      _time.hour,
-      _time.minute,
-    );
     final rawReading = BoilerReading(
       id: _createReadingId(),
-      recordedAt: recordedAt,
+      recordedAt: now,
       createdAt: now,
       boilerName: _boilerName,
       fuelTotal: fuelTotal,
@@ -1013,8 +968,6 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
   void _finishSubmission(MessageType type, String message) {
     setState(() {
       _isSubmitting = false;
-      _date = DateTime.now();
-      _time = TimeOfDay.now();
       _fuelController.clear();
       _waterController.clear();
       _steamController.clear();
@@ -1051,19 +1004,6 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
   String _createReadingId() {
     final random = math.Random().nextInt(1 << 32).toRadixString(16);
     return '${DateTime.now().millisecondsSinceEpoch}-$random';
-  }
-
-  String _formatDateOnly(DateTime value) {
-    final day = value.day.toString().padLeft(2, '0');
-    final month = value.month.toString().padLeft(2, '0');
-    final year = value.year.toString();
-    return '$day/$month/$year';
-  }
-
-  String _formatTimeOnly(TimeOfDay value) {
-    final hour = value.hour.toString().padLeft(2, '0');
-    final minute = value.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
   }
 }
 
@@ -1406,34 +1346,6 @@ class TwoColumnInfo extends StatelessWidget {
             Expanded(child: children[0]),
             const SizedBox(width: 12),
             Expanded(child: children[1]),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class TwoColumnActions extends StatelessWidget {
-  const TwoColumnActions({required this.left, required this.right, super.key});
-
-  final Widget left;
-  final Widget right;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 430) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [left, const SizedBox(height: 10), right],
-          );
-        }
-        return Row(
-          children: [
-            Expanded(child: left),
-            const SizedBox(width: 10),
-            Expanded(child: right),
           ],
         );
       },
