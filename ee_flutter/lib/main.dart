@@ -281,10 +281,18 @@ class _TrapSizingScreenState extends State<TrapSizingScreen> {
         DropdownButtonFormField<TrapRule>(
           key: ValueKey(selectedRule?.name ?? 'empty-rule'),
           initialValue: selectedRule,
+          isExpanded: true,
           decoration: const InputDecoration(labelText: 'Uso'),
           items: _rules
               .map(
-                (rule) => DropdownMenuItem(value: rule, child: Text(rule.name)),
+                (rule) => DropdownMenuItem(
+                  value: rule,
+                  child: Text(
+                    rule.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               )
               .toList(),
           onChanged: _selectRule,
