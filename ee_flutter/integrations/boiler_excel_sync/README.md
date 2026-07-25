@@ -95,6 +95,14 @@ La cuenta Microsoft usada es `Asistente Proyectos Mantenimiento`. El libro debe
 estar cerrado en Excel de escritorio durante la primera prueba integral para
 evitar un bloqueo de edicion.
 
+Configuracion operativa actual:
+
+- Repositorio privado: `inoxiap/eficiencia-energetica-datos`.
+- Issue: `#1`.
+- Flujo: `EE - Actualizar Excel maestro desde GitHub`.
+- Frecuencia: cada hora.
+- Cuenta Firebase: `EE Excel Reader`, con rol de solo lectura.
+
 ## Supuestos pendientes de validacion
 
 - Presion diaria: promedio aritmetico de lecturas del dia.
