@@ -1,0 +1,44 @@
+name: Sincronizar consumos de calderas con Excel
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar codigo publico de la aplicacion
+        run: |
+          git clone --depth 1 \
+            https://github.com/inoxiap/eficiencia-energetica-ee.git \
+            source
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: source/ee_flutter/integrations/boiler_excel_sync/requirements.txt
+
+      - name: Instalar dependencias
+        working-directory: source/ee_flutter/integrations/boiler_excel_sync
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar pruebas de transformacion
+        working-directory: source/ee_flutter/integrations/boiler_excel_sync
+        run: python -m unittest -v test_exporter.py
+
+      - name: Publicar payload incremental en este issue privado
+        working-directory: source/ee_flutter/integrations/boiler_excel_sync
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          EE_DATA_REPOSITORY: ${{ github.repository }}
+          EE_DATA_ISSUE_NUMBER: "1"
+          EE_DATA_REPO_TOKEN: ${{ github.token }}
+        run: python exporter.py

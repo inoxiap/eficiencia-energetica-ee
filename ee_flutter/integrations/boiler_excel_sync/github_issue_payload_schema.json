@@ -1,0 +1,89 @@
+{
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "generatedAtUtc",
+    "timezone",
+    "collection",
+    "mode",
+    "windowStartUtc",
+    "affectedDates",
+    "datasets"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer"
+    },
+    "generatedAtUtc": {
+      "type": "string"
+    },
+    "timezone": {
+      "type": "string"
+    },
+    "collection": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "incremental",
+        "full"
+      ]
+    },
+    "windowStartUtc": {
+      "type": "string"
+    },
+    "affectedDates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "datasets": {
+      "type": "object",
+      "required": [
+        "raw",
+        "intervals",
+        "hourly",
+        "daily"
+      ],
+      "properties": {
+        "raw": {
+          "$ref": "#/definitions/dataset"
+        },
+        "intervals": {
+          "$ref": "#/definitions/dataset"
+        },
+        "hourly": {
+          "$ref": "#/definitions/dataset"
+        },
+        "daily": {
+          "$ref": "#/definitions/dataset"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "dataset": {
+      "type": "object",
+      "required": [
+        "headers",
+        "rows"
+      ],
+      "properties": {
+        "headers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "array"
+          }
+        }
+      }
+    }
+  }
+}
