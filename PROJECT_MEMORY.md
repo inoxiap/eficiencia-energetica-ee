@@ -1,0 +1,734 @@
+# Memoria del proyecto: Eficiencia Energetica EE
+
+Ultima actualizacion: 2026-07-27
+
+Este documento es la memoria operativa persistente del proyecto. Debe leerse
+completo al iniciar o retomar cualquier tarea y actualizarse al terminar cambios
+o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
+
+## Identidad y ubicacion
+
+- Usuario del proyecto: Jeff.
+- Nombre usado para el asistente: Phanto.
+- Repositorio canonico:
+  `C:\Users\windo\Documents\Codex\2026-05-12\phanto-puedes-hacer-una-aplicaci-n`
+- Repositorio remoto:
+  `https://github.com/inoxiap/eficiencia-energetica-ee.git`
+- Rama principal: `main`.
+- Aplicacion activa: `ee_flutter/`.
+- Version Flutter registrada: `1.1.2+5`.
+- La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
+  historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
+
+## Regla de trabajo
+
+Al retomar:
+
+1. Leer este archivo.
+2. Ejecutar `git status --short --branch`.
+3. Revisar el codigo y la documentacion relacionados con la solicitud.
+4. Conservar cambios existentes que no pertenezcan a la tarea.
+5. Implementar y probar en pasos verificables.
+6. Antes de responder, agregar una entrada a la bitacora de este archivo si hubo
+   cambios, despliegues, pruebas relevantes, decisiones o hallazgos.
+
+Si este documento contradice al codigo o a Firebase, comprobar el estado real y
+actualizar esta memoria. No asumir que un informe antiguo sigue vigente.
+
+## Objetivo del producto
+
+Aplicacion sencilla para operadores de una planta de procesamiento de aceite de
+palma. Permite capturar datos de eficiencia energetica, calcular resultados,
+guardar evidencia y dar seguimiento operativo desde Android y web.
+
+La interfaz debe priorizar pocos pasos, textos claros, unidades visibles,
+selectores faciles y confirmacion antes de guardar. Los operadores no deben
+necesitar criterio tecnico avanzado para completar un levantamiento.
+
+## Arquitectura actual
+
+- Flutter/Dart: una base para Android y web/PWA.
+- Firebase Authentication: sesion de operadores.
+- Cloud Firestore: informacion estructurada.
+- Cloudinary: fotografias y evidencias.
+- FastAPI, Jinja2 y Plotly.js: dashboard administrador independiente en
+  `ee_flutter/energy_dashboard/`.
+- Estado Flutter: principalmente estado local de widgets y servicios/repositorios;
+  no hay un framework global de estado.
+- Configuracion Firebase Flutter:
+  `ee_flutter/lib/firebase_options.dart`.
+- Reglas e indices:
+  `ee_flutter/firestore.rules` y `ee_flutter/firestore.indexes.json`.
+
+## Produccion
+
+- Proyecto Firebase: `eficiencia-energetica-ee`.
+- Plan Firebase: Spark.
+- Web/PWA:
+  `https://eficiencia-energetica-ee.web.app`
+- Firebase Hosting publica `ee_flutter/build/web`.
+- El proveedor Firebase Authentication Email/Password fue habilitado y probado
+  en produccion el 2026-07-16.
+- El operador usa cedula y PIN en pantalla. Internamente la app deriva un correo
+  tecnico y usa Firebase Email/Password. El PIN no se guarda en Firestore,
+  SharedPreferences ni localStorage.
+- El registro publico siempre crea rol `operator`. El rol `admin` debe asignarse
+  desde un entorno administrativo confiable.
+- El dashboard FastAPI aun no esta desplegado como servicio HTTPS. Su ejecucion
+  conocida es local en `http://127.0.0.1:8080`.
+- No trabajar con Firebase Emulator Suite salvo que Jeff lo solicite. Durante el
+  desarrollo inicial Jeff decidio que las validaciones funcionales se realicen
+  directamente sobre produccion porque aun no hay usuarios operativos reales.
+  Los datos de prueba deben quedar claramente identificados.
+
+## Proveedor de imagenes
+
+El proveedor existente es Cloudinary y debe reutilizarse:
+
+- Cloud name publico: `dovufh5wv`.
+- Upload preset unsigned: `ee_evidencias_unsigned`.
+- Servicio: `ee_flutter/lib/services/cloudinary_service.dart`.
+
+No migrar imagenes ni cambiar el proveedor sin una razon tecnica documentada.
+No almacenar secretos de Cloudinary en Git.
+
+## Modulos funcionales
+
+1. Dimensionamiento de trampas de vapor.
+2. Reporte de tuberia desnuda con fotografia.
+3. Reporte de fugas de vapor, aceite, agua y aire con fotografia.
+4. Seguimiento de fugas y tuberias con estados `OT generada` y
+   `Trabajo ejecutado`.
+5. Ingreso horario de consumos de calderas.
+6. Registro e inicio de sesion de operadores.
+7. Levantamiento electrico de bombas.
+8. Panel administrador legado dentro de Flutter.
+9. Dashboard administrador independiente en Python/HTML.
+10. Actualizacion semiautomatica Android mediante `app_config`.
+
+## Colecciones Firestore conocidas
+
+- `users`
+- `steam_trap_sizing_reports`
+- `bare_pipe_reports`
+- `leak_reports`
+- `boiler_consumption_readings`
+- `pump_energy_surveys`
+- `motor_reference_tables`
+- `app_config`
+
+Los registros nuevos deben conservar entradas originales, unidades, resultado,
+usuario, timestamps de servidor, plataforma, version de app, version de esquema,
+estado y trazabilidad. No usar cedula, nombre o PIN como ID publico.
+
+## Catalogo de secciones
+
+El catalogo comun usa identificadores estables y etiquetas:
+
+- Refineria
+- Confiteria y Galleteria
+- Desodorizacion
+- Fraccionamiento
+- Manteca
+- Aceites
+- Hidrogenacion
+- Jaboneria
+- Recepcion
+- DEX
+- Servicios Industriales
+- Margarina
+
+La fuente de codigo esta en
+`ee_flutter/lib/domain/section_catalog.dart`.
+
+## Reglas funcionales importantes
+
+- `Calcular` no guarda automaticamente. Primero muestra el resultado y luego
+  solicita confirmacion para guardar.
+- En trampas se conservan los caminos de condensado conocido e indirecto.
+- Condensado directo se ingresa en L/min.
+- Factor de seguridad de trampas: `1.2`.
+- Tracing no solicita calculo indirecto y recomienda directamente la trampa
+  configurada.
+- No modificar formulas sin documentar el motivo y conservar resultados previos
+  con pruebas.
+- Consumos de agua, bunker y vapor se guardan actualmente en galones (`gal`).
+- No sumar lecturas acumuladas; calcular deltas validados.
+- Todas las lecturas nuevas se ingresan como lectura acumulada.
+- Solo Alfa Laval debe solicitar vapor. Distral 900 y Cleaver Brooks lo
+  mantienen deshabilitado.
+- El modulo Ingresar consumos tiene dos pestanas inferiores: Consumos y
+  Presiones.
+- Las presiones de los distribuidores Cleaver y 900 se ingresan en PSI y se
+  guardan en `steam_pressure_readings`.
+- Bombas debe diferenciar kW de kWh y no afirmar sobredimensionamiento sin
+  revision hidraulica.
+- Fotografias de fugas y tuberia se suben antes de confirmar el documento; los
+  fallos deben dejar un estado explicito y permitir reintento.
+- `Trabajo ejecutado` solo se habilita despues de `OT generada`.
+
+## Formulas y supuestos que deben conservarse
+
+- Aceite o grasa: calor especifico aproximado `2.0 kJ/(kg C)`.
+- Densidad aproximada de aceite de palma: `0.89 kg/L`.
+- Condensado: densidad aproximada `1.0 kg/L` para convertir L/min a kg/h.
+- Vapor: propiedades interpoladas desde tabla interna.
+- Distribuidor principal de caldero: constante conservadora de 12% sobre agua
+  consumida, comparada con perdida superficial.
+- Distribuidor secundario: estimacion por diametro, presion y velocidad de
+  referencia, con drenaje tipico de linea y comparacion superficial.
+- Tuberia desnuda: conservar la formula y flujo existentes.
+
+Detalle y fuentes:
+`ee_flutter/docs/FORMULAS_Y_UNIDADES.md` y la documentacion tecnica existente.
+
+## Autenticacion
+
+- Implementacion:
+  `ee_flutter/lib/services/operator_auth_service.dart`.
+- Sesion:
+  `ee_flutter/lib/services/operator_session.dart`.
+- Firebase Auth Email/Password esta habilitado en produccion.
+- La sesion persistente fue comprobada en web y Android.
+- No guardar el PIN, ni siquiera en esta memoria.
+- Un PIN de 4 a 6 digitos se acepta por decision de uso interno, aunque su
+  seguridad es limitada.
+
+## Pruebas y estado verificado
+
+Ultima bateria amplia conocida:
+
+- `flutter analyze`: aprobado.
+- `flutter test`: 41 pruebas aprobadas el 2026-07-26.
+- Reglas Firestore: 7 pruebas aprobadas en la bateria anterior; las reglas
+  nuevas compilaron y se publicaron correctamente el 2026-07-24, pero no se
+  repitio Emulator Suite por la decision de no trabajar con emuladores Firebase.
+- Dashboard: 7 pruebas aprobadas.
+- `flutter build apk --release`: aprobado el 2026-07-24, 52.7 MB.
+- `flutter build web --release`: aprobado el 2026-07-24.
+- `flutter build web`: aprobado el 2026-07-26.
+- `flutter build apk --debug`: aprobado el 2026-07-26.
+- Pixel 8 API 35: instalacion y revision visual aprobadas.
+- Registro, ingreso y persistencia con Firebase Auth real: aprobados.
+- Carga de fuga real de prueba desde Pixel 8: aprobada.
+- La fuga de prueba aparecio en Seguimiento con fotografia, fecha, operador y
+  estados de OT.
+
+No repetir estos resultados como actuales despues de cambiar codigo sin volver a
+ejecutar las pruebas correspondientes.
+
+## Emulador Android
+
+- AVD usado: `EE_Pixel_8_API_35_x64`.
+- Dispositivo ADB habitual: `emulator-5554`.
+- Se habilito el teclado fisico en:
+  `C:\Users\windo\.android\avd\EE_Pixel_8_API_35_x64.avd\config.ini`
+  con `hw.keyboard = yes`.
+- Android tiene `show_ime_with_hard_keyboard = 1`.
+- Se comprobo escritura desde el teclado de Windows.
+- Si el emulador pierde Internet, un arranque limpio puede ser necesario.
+
+## Comandos frecuentes
+
+Desde `ee_flutter/`:
+
+```powershell
+flutter pub get
+flutter analyze
+flutter test
+flutter build apk --release
+flutter build web --release
+firebase deploy --only firestore:rules,firestore:indexes,hosting
+```
+
+Dashboard:
+
+```powershell
+cd energy_dashboard
+.venv\Scripts\python.exe -m pytest -q
+.venv\Scripts\uvicorn.exe app.main:app --reload --port 8080
+```
+
+Reglas con Emulator Suite, solo cuando corresponda:
+
+```powershell
+firebase emulators:exec --only firestore "npm --prefix functions run test:rules"
+```
+
+## Documentos de referencia
+
+- `README.md`
+- `ee_flutter/README.md`
+- `ee_flutter/IMPLEMENTATION_REPORT.md`
+- `ee_flutter/docs/AUDITORIA_TECNICA.md`
+- `ee_flutter/docs/PLAN_IMPLEMENTACION.md`
+- `ee_flutter/docs/MODELO_DATOS.md`
+- `ee_flutter/docs/DECISIONES_TECNICAS.md`
+- `ee_flutter/docs/FORMULAS_Y_UNIDADES.md`
+- `ee_flutter/docs/SEGURIDAD_Y_ROLES.md`
+
+Nota: `IMPLEMENTATION_REPORT.md` fue escrito antes de habilitar Email/Password.
+Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
+
+## Pendientes y riesgos
+
+- Dashboard FastAPI sin despliegue HTTPS.
+- Confirmar existencia e identificador de Caldera 1100.
+- Revisar con Operaciones los rangos de advertencia si cambian medidores,
+  combustible o regimen de trabajo; la referencia historica inicial ya fue
+  implementada.
+- Revisar y, con respaldo, eliminar cualquier `operatorPin` historico remoto.
+- Mantener restricciones de formato y tamano en el preset Cloudinary unsigned.
+- Registros historicos pueden carecer de UID o timestamps de servidor.
+- Sincronizacion Excel: falta crear el repositorio privado de transporte,
+  autorizar GitHub en Power Automate y ejecutar la prueba integral sobre el
+  maestro cerrado en Excel de escritorio.
+- El arbol Git contiene numerosos cambios aun no confirmados; no limpiarlo ni
+  descartarlo sin instruccion expresa de Jeff.
+
+## Bitacora
+
+### 2026-07-15 - Plataforma profesional inicial
+
+- Se implementaron autenticacion Firebase simplificada para Spark, usuarios,
+  fugas, seguimiento, bombas, dashboard, reglas, indices y auditoria.
+- Se conservaron formulas existentes, Cloudinary y panel administrador legado.
+- Se genero la version `1.1.0+3`.
+- Referencia detallada: `ee_flutter/IMPLEMENTATION_REPORT.md`.
+
+### 2026-07-16 - Produccion, autenticacion y prueba integral
+
+- Se habilito Email/Password en Firebase Authentication.
+- Se corrigio el registro/inicio de sesion web y la invalidacion de cache de
+  Firebase Hosting.
+- Se desplego la web en
+  `https://eficiencia-energetica-ee.web.app`.
+- Se verifico registro, ingreso y sesion persistente con Firebase real.
+- Se compilo e instalo el APK release en Pixel 8.
+- Se creo una fuga de prueba de vapor desde el emulador y se comprobo su
+  aparicion en Seguimiento de reportes con miniatura y controles de OT.
+- Se corrigio la configuracion de teclado del AVD para aceptar teclas de Windows.
+
+### 2026-07-22 - Memoria persistente
+
+- Se creo este `PROJECT_MEMORY.md`.
+- Se agrego `AGENTS.md` para obligar su lectura al iniciar o retomar tareas y su
+  actualizacion despues de cambios.
+- Se agrego un archivo de enlace en la carpeta de arranque vacia
+  `C:\Users\windo\Documents\App Eficiencia Energetica` para que futuras sesiones
+  encuentren el repositorio canonico.
+- No se modifico codigo funcional ni se realizo despliegue.
+
+### 2026-07-24 - Consumos acumulados y presiones
+
+- Solicitud: dividir Ingresar consumos en las pestanas Consumos y Presiones.
+- Resultado: Consumos crea solo lecturas acumuladas; Alfa Laval solicita vapor
+  y Distral 900/Cleaver Brooks lo deshabilitan.
+- Resultado: se agrego la captura de cinco presiones del distribuidor Cleaver y
+  nueve del distribuidor 900, todas en PSI, con revision y confirmacion previa.
+- Datos: nueva coleccion `steam_pressure_readings` con auditoria de usuario,
+  timestamps de servidor, plataforma, version de app y version de esquema.
+- Compatibilidad: los registros historicos `interval_consumption` siguen
+  leyendose, pero ya no pueden crearse desde la interfaz ni por reglas.
+- Archivos principales: `ee_flutter/lib/main.dart`,
+  `ee_flutter/lib/screens/pressure_entry_tab.dart`,
+  `ee_flutter/lib/domain/steam_pressure_reading.dart`,
+  `ee_flutter/lib/services/pressure_reading_store.dart` y
+  `ee_flutter/firestore.rules`.
+- Pruebas/builds: `flutter analyze` sin hallazgos, 38 pruebas Flutter aprobadas,
+  web release y APK release de 52.7 MB compilados.
+- Despliegue: Hosting y reglas Firestore publicados correctamente en produccion
+  en `https://eficiencia-energetica-ee.web.app`.
+- Verificacion web: URL y titulo correctos, sin errores ni advertencias en la
+  consola del navegador.
+
+### 2026-07-24 - Evaluacion de exportacion a Excel
+
+- Firestore debe mantenerse como fuente oficial; no usar GitHub como base de
+  datos ni publicar alli informacion operativa.
+- La alternativa local con Python y Programador de tareas de Windows fue
+  descartada por Jeff porque el proceso debe continuar con su laptop apagada.
+- El libro debe usar `documentId` como clave, evitar duplicados y separar
+  Consumos, Presiones, Trampas, Tuberia, Fugas y Bombas en hojas.
+- El dashboard ya tiene exportacion CSV como base, pero actualmente no incluye
+  `steam_pressure_readings` ni columnas amigables por modulo.
+- Ruta recomendada totalmente en nube: GitHub Actions consulta los cambios de
+  Firestore, actualiza el XLSX y lo escribe directamente en SharePoint/OneDrive
+  mediante Microsoft Graph. Requiere secretos de GitHub, credencial Firebase de
+  solo lectura y una aplicacion Microsoft Entra limitada al sitio destino.
+- Power Automate puede observar el archivo en SharePoint/OneDrive para enviar
+  avisos o ejecutar procesos posteriores, pero no es necesario para sincronizar
+  Firestore con Excel.
+- Power Automate directo contra Firestore requeriria REST/conector personalizado
+  y probablemente licencia Premium; no es la primera opcion.
+- Estado: investigacion y recomendacion solamente; no implementado. Antes de
+  avanzar, confirmar disponibilidad de OneDrive/SharePoint corporativo y acceso
+  de un administrador Microsoft 365 para autorizar la aplicacion Entra.
+
+### 2026-07-24 - Revision del aviso de actualizaciones
+
+- La app ya consulta al iniciar `app_config/mobile_app` y compara
+  `latestBuildNumber` con el build instalado.
+- Produccion conserva `latestVersion: 1.0.1` y `latestBuildNumber: 2`, mientras
+  el codigo actual usa `1.1.0+3`; por eso no aparece ningun aviso actualmente.
+- El documento permite mensaje, URL, actualizacion opcional o forzada y build
+  minimo soportado.
+- El campo remoto `channel: android` existe, pero el cliente actual no lo
+  evalua. Web y Android usan el mismo `updateUrl`.
+- Antes de la proxima version conviene separar el comportamiento: Android abre
+  la descarga del APK y web muestra un boton para recargar la version publicada.
+- Cada APK de actualizacion debe conservar `applicationId` y la misma firma del
+  APK instalado; el build nuevo debe ser siempre mayor.
+- Estado: revision solamente; no se modifico codigo ni configuracion remota.
+
+### 2026-07-24 - Integracion de consumos de calderas con Excel
+
+- Se audito sin modificar
+  `C:\Users\windo\OneDrive - Grupo Danec\MEJORAS\1. SEGUIMIENTO DE LA ENERGÍA\REPORTE DE CALDERAS 2018.xlsx`.
+- `Regist_inform` usa A:P: Fecha, Dia, Año, Mes, Presion, Semana, Caldera,
+  paro, horas optimas, tiempo real, eficiencia, alcance, bunker, agua,
+  Ton/Agua y galones/m3.
+- Etiquetas confirmadas en el maestro: `CalAlfa`, `CalCleaver` y
+  `900Distral`. El maestro conserva formulas propias y no fue alterado.
+- Se creo
+  `outputs/energia-calderas-20260724/DATOS_CALDERAS_APP_AUXILIAR.xlsx`
+  con hojas Control, Datos_Firestore, Intervalos, Consumo_Horario y
+  Resumen_Diario.
+- Se implemento `ee_flutter/integrations/boiler_excel_sync/`: descarga
+  `boiler_consumption_readings`, conserva todas las revisiones, calcula con la
+  revision efectiva, rechaza deltas no positivos, distribuye intervalos
+  irregulares por solapamiento horario y genera el resumen diario A:P.
+- Solo se agregan lecturas `cumulative_meter` con unidades `gal`. Las unidades
+  y valores originales permanecen visibles en Datos_Firestore.
+- La presion diaria se calcula provisionalmente como promedio de lecturas del
+  dia y caldera. Paro=0, horas optimas=24, tiempo real=24, eficiencia=1 y
+  alcance=0.98 quedan documentados como supuestos pendientes de Operaciones.
+- Se preparo `.github/workflows/sync-boiler-excel.yml` para ejecución horaria
+  con GitHub Actions y carga a OneDrive/SharePoint mediante Microsoft Graph.
+  No esta operativo hasta subir el workflow y configurar secretos de Firebase
+  de solo lectura y Microsoft Entra; ningun secreto se guardo en Git.
+- App: se agrego `Presion de caldera (PSI)` obligatoria a lecturas nuevas,
+  `schemaVersion: 2` y compatibilidad con documentos historicos de esquema 1.
+- Version generada: `1.1.1+4`. Web y reglas Firestore desplegadas en
+  `https://eficiencia-energetica-ee.web.app`; APK release de 55.285.365 bytes.
+- Pruebas: `flutter analyze`, 38 pruebas Flutter, 9 pruebas de reglas y 5
+  pruebas del exportador aprobadas; web y APK release compilados.
+- Pendiente externo: asignar secretos de GitHub y autorizar una aplicacion
+  Microsoft Entra con permisos minimos sobre el archivo de destino.
+
+### 2026-07-24 - Arquitectura Excel sin Power Automate Premium
+
+- Jeff confirmo usar la misma cuenta Microsoft
+  `Asistente Proyectos Mantenimiento` para Excel Online y Power Automate.
+- El flujo con disparador HTTP se creo, verifico y elimino al confirmar que
+  requiere licencia Power Automate Premium.
+- Se descarto Microsoft Graph directo para evitar una aplicacion Entra y
+  permisos administrativos adicionales.
+- La solucion elegida usa un GitHub Action alojado en el repositorio privado,
+  un issue del mismo repositorio, el conector estandar GitHub de Power Automate
+  y `Run script` de Excel Online (Business). Firestore sigue siendo la fuente
+  oficial.
+- El repositorio de codigo `inoxiap/eficiencia-energetica-ee` es publico. Nunca
+  publicar alli payloads operativos; crear un repositorio privado separado.
+- El workflow privado usa su `GITHUB_TOKEN` automatico con `issues: write`; no
+  requiere un token personal. El unico secreto previsto es la cuenta Firebase
+  de solo lectura.
+- `exporter.py` publica solamente el dia local en curso como payload incremental
+  y rechaza cuerpos mayores al limite configurado. El Office Script acumula el
+  historial por claves estables.
+- Se creo en Excel Online el script
+  `EE - Sincronizar consumos de calderas`. Administra `App_Datos_Firestore`,
+  `App_Intervalos`, `App_Consumo_Horario`, `App_Resumen_Diario`,
+  `App_Mapeo_Regist`, `App_Control` y las filas controladas de `Regist_inform`.
+- Prueba de idempotencia aprobada en `Book.xlsx`: la segunda ejecucion produjo
+  0 filas nuevas, 1 dato crudo actualizado y 1 fila de `Regist_inform`
+  actualizada, sin duplicados.
+- Pruebas del exportador: 9 aprobadas. TypeScript del Office Script transpilo y
+  el script se ejecuto correctamente en Excel Online.
+- Respaldo del maestro creado antes de la primera escritura:
+  `Respaldos App EE\REPORTE DE CALDERAS 2018 - respaldo antes de Power Automate 20260724-184542.xlsx`.
+- El maestro estaba bloqueado por Excel de escritorio. Para la prueba integral,
+  Jeff debe cerrarlo primero.
+- Se creo `inoxiap/eficiencia-energetica-datos` como repositorio privado y su
+  issue `#1` como buzon.
+- Power Automate quedo conectado a `inoxiap`, configurado con el issue `#1`,
+  el archivo maestro y el Office Script, y se guardo correctamente sin
+  conectores Premium.
+- Se creo `EE Excel Reader` con rol `Lector de Cloud Datastore`; su clave se
+  guardo solamente como el secreto `FIREBASE_SERVICE_ACCOUNT_JSON` del
+  repositorio privado y el archivo descargado se elimino de la computadora.
+- El exportador se publico en `main` con commit `ef1c368`. El workflow privado
+  se instalo y su primera ejecucion manual termino correctamente en 32 segundos.
+- Se actualizo `actions/setup-python` de v5 a v6 para eliminar la advertencia
+  de Node.js 20. La segunda ejecucion termino correctamente en 24 segundos y
+  sin advertencias.
+- El payload del issue se valido como esquema 1, modo incremental y sin filas
+  para el dia actual, porque no existian lecturas nuevas.
+- La prueba integral de Power Automate termino `Test succeeded` en 9 segundos.
+  El maestro creo las seis hojas `App_*`; `App_Control` quedo en
+  `Completado`, con 0 filas nuevas y 0 conflictos. `Regist_inform` no recibio
+  filas porque el payload estaba vacio.
+- Pendiente operativo: validar de nuevo cuando exista al menos un par de
+  lecturas acumuladas consecutivas de una caldera para comprobar deltas y
+  resumen diario con datos reales.
+
+### 2026-07-24 - Recuperacion de consumos pendientes y prueba Excel real
+
+- Solicitud: investigar por que una lectura ingresada desde el telefono no
+  aparecia en el Excel despues de ejecutar Power Automate.
+- Hallazgo: la lectura reportada por Jeff no llego a Firestore; quedo
+  `pending_sync` en el almacenamiento local del telefono. La transaccion de
+  creacion intentaba leer primero un documento inexistente y las reglas
+  rechazaban esa lectura para operadores con `PERMISSION_DENIED`.
+- Hallazgo adicional: `app_config/mobile_app` seguia anunciando
+  `1.0.1+2`, por lo que los telefonos no recibian aviso del APK nuevo.
+- Correccion: `FirestoreConsumptionStore` crea directamente el documento;
+  las reglas existentes siguen impidiendo actualizaciones y duplicados. Las
+  consultas de operador ahora filtran por `createdByUid`.
+- Recuperacion: `HybridConsumptionStore` reintenta lecturas `pending_sync`
+  al abrir Ingresar consumos. Los registros locales heredados conservan
+  esquema 1 cuando no tienen presion y usan las unidades de galones ya
+  confirmadas para las calderas.
+- Firebase: se desplego el indice
+  `createdByUid ASC + recordedAt DESC`. El emulador Pixel 8 API 35 quedo sin
+  errores de permisos ni de indice contra produccion.
+- Prueba integral: un registro pendiente del emulador se recupero en
+  Firestore, GitHub Actions publico una fila y Power Automate termino
+  correctamente. El Office Script creo 1 fila cruda, 1 intervalo, 1 resumen
+  diario y 1 fila controlada de `Regist_inform`, sin conflictos.
+- Nota de calculo: al ser la primera lectura acumulada de la caldera, el
+  consumo diario queda en cero hasta disponer de una segunda lectura para
+  calcular el delta.
+- Version: `1.1.2+5`. APK publicado en GitHub, aviso remoto actualizado y
+  web desplegada en `https://eficiencia-energetica-ee.web.app`.
+- Verificacion: 39 pruebas Flutter aprobadas, `flutter analyze` sin
+  hallazgos, APK y web release compilados; enlace APK con respuesta HTTP 200.
+- Pendiente operativo: instalar el build 5 en el telefono de Jeff, abrir
+  Ingresar consumos para reenviar su lectura local y ejecutar la cadena
+  GitHub/Power Automate. Validar un segundo registro de la misma caldera para
+  comprobar un delta de consumo distinto de cero.
+
+### 2026-07-26 - Banco comparativo de instrumentos industriales
+
+- Solicitud: reemplazar el primer borrador de entradas genericas por opciones
+  con apariencia de manometro o instrumento de medicion industrial.
+- Resultado: `Tablero de ingreso` se rehizo como `Banco de instrumentos`, con
+  cuatro alternativas interactivas conectadas a una misma lectura: manometro
+  analogico, encoder rotativo con pantalla LED, dial circular y transmisor
+  lineal. Incluye selector de galones, PSI, amperios y temperatura, mas ajuste
+  fino mediante botones.
+- Dependencias MIT incorporadas: `geekyants_flutter_gauges`,
+  `flutter_dial_knob`, `sleek_circular_slider` y `segment_display`.
+- Decision: se descarto Syncfusion para este prototipo por su licencia
+  Community/comercial y `gauge_kit` por ser una publicacion demasiado reciente.
+- Hallazgo visual: `RadialTrack.steps` representa el intervalo numerico y no la
+  cantidad de divisiones. Se corrigio para mostrar cinco divisiones legibles y
+  evitar miles de marcas superpuestas.
+- Archivos principales:
+  `ee_flutter/lib/screens/input_controls_playground_screen.dart`,
+  `ee_flutter/lib/main.dart`, `ee_flutter/pubspec.yaml`,
+  `ee_flutter/pubspec.lock` y
+  `ee_flutter/test/input_controls_playground_test.dart`.
+- Pruebas/builds: analisis focalizado sin hallazgos, 40 pruebas Flutter
+  aprobadas, `flutter build web` aprobado y `git diff --check` sin errores.
+- Revision visual: aprobada en 390x844. Se verificaron la escala del manometro,
+  el cambio de galones a PSI, el ajuste fino de 0,1 PSI y la presentacion de los
+  cuatro instrumentos.
+- Despliegue: no se publico en Firebase. La vista local temporal sigue en
+  `http://127.0.0.1:4174`.
+- Pendiente: Jeff debe escoger el instrumento o combinacion que resulte mas
+  sencilla para operadores antes de aplicarla a los formularios productivos.
+
+### 2026-07-26 - Inicio y levantamiento de bombas simplificados
+
+- Solicitud: integrar el acceso de usuario con el encabezado, mostrar el nombre
+  de la sesion, reorganizar modulos y reducir el criterio tecnico requerido en
+  el levantamiento electrico de bombas.
+- Inicio: el encabezado y el acceso de usuario usan una proporcion aproximada
+  4:1; el nombre de la sesion se actualiza al volver del acceso. `Ingresar
+  consumos` es el primer modulo y `Seguimiento de reportes` el penultimo.
+- Terminologia: todos los textos visibles de la app cambiaron de `operador` a
+  `usuario`; los identificadores tecnicos y el rol interno `operator` se
+  conservan por compatibilidad.
+- Bombas: el tipo de levantamiento aparece primero. Seccion y potencia nominal
+  usan ruedas con el estilo comun. La corriente avanza cada 2 A y las horas de
+  trabajo diario se seleccionan entre 1 y 24.
+- Bombas: se elimino la interfaz de mediciones avanzadas y el panel hidraulico
+  `Operacion`. La tension nominal es la fuente predeterminada; la tension
+  medida queda dentro de un bloque puntual y se registra `voltageSource`.
+- Relacion: mejora y verificacion consultan las lineas base de Firestore,
+  permiten escoger seccion, equipo y bomba, y reutilizan `assetId` junto con
+  `baselineSurveyId`. Los IDs tecnicos dejaron de solicitarse manualmente.
+- Seguridad: `pump_energy_surveys` permite lectura a usuarios autenticados para
+  que las lineas base puedan reutilizarse entre turnos, sin habilitar edicion ni
+  eliminacion.
+- Archivos principales: `ee_flutter/lib/main.dart`,
+  `ee_flutter/lib/screens/pump_survey_screen.dart`,
+  `ee_flutter/lib/domain/pump_energy.dart`,
+  `ee_flutter/lib/services/pump_survey_store.dart`,
+  `ee_flutter/firestore.rules` y pruebas/documentacion asociadas.
+- Pruebas/builds: `flutter analyze` sin hallazgos, 41 pruebas Flutter aprobadas,
+  web compilada y APK debug compilado. Revision visual aprobada en 390x844 para
+  inicio, acceso de usuario, linea base y datos electricos.
+- Despliegue: no se publico Hosting ni la regla nueva mientras Jeff revisa el
+  prototipo local en `http://127.0.0.1:4174`.
+- Pendiente: despues de la aprobacion visual, desplegar Hosting y reglas para
+  habilitar la consulta compartida de lineas base en produccion.
+
+### 2026-07-27 - Navegacion inferior, presion y odometro digital
+
+- Solicitud: sustituir `Volver a EE` en todos los modulos por una barra inferior
+  con `Casa`, integrar la presion junto a la caldera y probar un ingreso de diez
+  digitos similar a un contador industrial.
+- Navegacion: acceso de usuario, trampas, tuberia desnuda, fugas, bombas, banco
+  de instrumentos, consumos, seguimiento y administrador ya usan barra
+  inferior. Las pantallas con pestañas conservan sus destinos y agregan Casa.
+- Consumos: caldera y presion comparten una fila con proporcion 3:1. La rueda
+  trabaja de 0 a 200 PSI en pasos de 1 o de 0,0 a 13,8 bar en pasos de 0,1,
+  conservando PSI como unidad persistida. Valores iniciales: Alfa Laval 10,4
+  bar (151 PSI); Distral 900 y Cleaver Brooks 8,0 bar (116 PSI).
+- Banco: se agrego un odometro digital de diez ruedas independientes. Al abrir,
+  consulta el almacen hibrido y carga la lectura acumulada de bunker mas
+  reciente de la caldera seleccionada; sin historial muestra cero.
+- Archivos principales: `ee_flutter/lib/main.dart`,
+  `ee_flutter/lib/screens/input_controls_playground_screen.dart`,
+  `ee_flutter/lib/widgets/home_navigation_bar.dart` y pruebas de widgets.
+- Pruebas/builds: `flutter analyze` sin hallazgos, 41 pruebas Flutter
+  aprobadas, web compilada y APK debug compilado.
+- Revision visual: aprobada en 390x844. Se comprobaron 151 PSI para Alfa, 116
+  PSI y 8,0 bar para Cleaver, regreso con Casa, carga real de
+  `0004564621 gal` y modificacion independiente de una rueda. Sin errores de
+  consola ni desbordamientos.
+- Despliegue: no se publico en Firebase. La compilacion local esta disponible
+  en `http://127.0.0.1:4174/`.
+- Pendiente: Jeff debe validar el odometro antes de reutilizarlo en los campos
+  productivos de bunker, agua o vapor.
+
+### 2026-07-27 - Odometros productivos, conversion Alfa y rangos historicos
+
+- Solicitud: aplicar el odometro de diez digitos al ingreso de consumos,
+  intensificar el verde, ampliar la lectura inferior, convertir las lecturas
+  Alfa Laval y analizar el historico para prevenir errores de digitacion.
+- Alfa Laval: bunker se ingresa en litros y se normaliza como `L / 3.79` a
+  galones; agua se ingresa en unidades del contador de 10 litros y se normaliza
+  como `unidad x 2.64` a galones; vapor permanece en galones. Firestore conserva
+  valor original, unidad, factores y valor normalizado con esquema 3.
+- Odometros: bunker, agua y vapor usan diez ruedas independientes, cargan la
+  lectura anterior de la caldera y conservan el valor guardado despues de una
+  sincronizacion correcta. El verde paso a `#00ff66` y la lectura inferior a
+  18 px.
+- Seguridad: se analizo `Regist_inform` hasta el 2026-07-23. Los limites de
+  advertencia corresponden al percentil 99 historico por hora mas 25 %:
+  Alfa 380/6600, Cleaver 415/5750 y Distral 345/4700 gal/h para bunker/agua.
+  La app advierte y exige una segunda confirmacion, pero permite registrar una
+  condicion real extraordinaria.
+- Excel: `App_Resumen_Diario` y `App_Consumo_Horario` reconciliaron exactamente.
+  `Regist_inform` estaba atrasada porque `App_Mapeo_Regist` no contenia la fila
+  administrada y el Office Script la marcaba como conflicto historico. Se
+  preparo una recuperacion de mapeo para filas desde el 2026-07-24, sin tocar
+  filas historicas anteriores. El cambio aun no reemplaza el Office Script
+  activo de Power Automate.
+- Archivos principales: `ee_flutter/lib/domain/boiler_consumption.dart`,
+  `ee_flutter/lib/main.dart`,
+  `ee_flutter/lib/screens/input_controls_playground_screen.dart`,
+  `ee_flutter/integrations/boiler_excel_sync/office_script.ts` y pruebas/docs.
+- Pruebas/builds: `flutter analyze` sin hallazgos, 45 pruebas Flutter y 9 del
+  exportador aprobadas; Office Script transpilo sin errores; web y APK debug
+  compilaron. Revision visual aprobada en 390x844, sin errores de consola,
+  desbordamientos ni escrituras de prueba.
+- Despliegue: no se publico Firebase Hosting, APK ni Office Script. La web local
+  compilada permanece en `http://127.0.0.1:4174/`.
+- Pendiente: con autorizacion de Jeff, copiar el Office Script corregido al
+  flujo productivo y ejecutar Power Automate para reconciliar `Regist_inform`.
+
+### 2026-07-27 - Diagnostico de sincronizacion y limpieza de demos
+
+- Solicitud: investigar el fallo del workflow privado de consumos, comprobar
+  los registros pendientes de Pablo Loachamin y eliminar los consumos demo de
+  calderas en Firebase de produccion.
+- Hallazgo: la ejecucion privada `#36` recupero correctamente Firestore, pero
+  fallo al publicar el issue porque el payload tenia 85.275 caracteres y el
+  limite seguro configurado era 60.000.
+- Recuperacion: Firestore contiene 26 lecturas reales de Pablo con estado
+  `synced`, registradas entre el 24 y el 27 de julio y creadas en la nube en un
+  lote el 27 de julio. No fueron eliminadas ni modificadas.
+- Causa adicional: existian 4.392 documentos demo en
+  `boiler_consumption_readings`, con IDs que comenzaban por
+  `demo_consumption_`. El exportador horario recorre la coleccion completa y
+  estos documentos contribuyeron a agotar la cuota diaria de lecturas del plan
+  Spark.
+- Limpieza: se eliminaron en produccion los 4.392 IDs demo por lotes
+  deterministas. Firestore confirmo la finalizacion de todas las operaciones de
+  borrado. La lectura de comprobacion inmediata no pudo ejecutarse porque la
+  cuota diaria ya estaba agotada.
+- Codigo y despliegue: no se modifico codigo, el workflow privado ni el Office
+  Script productivo.
+- Pendiente: modificar el transporte para publicar payloads por bloques o por
+  fecha y ejecutar la recuperacion de las 26 lecturas en Excel. Tambien conviene
+  evitar que el exportador lea toda la coleccion en cada ejecucion.
+
+### 2026-07-27 - Analisis de cuotas Firestore y transporte GitHub
+
+- El filtro incremental actual se aplica despues de ejecutar
+  `order_by("recordedAt").stream()`, por lo que cada workflow lee la coleccion
+  completa aunque el issue reciba solo registros recientes.
+- Con tres calderas y 72 lecturas diarias, el escaneo completo horario superaria
+  por si solo las 50.000 lecturas diarias del plan Spark aproximadamente al
+  cumplir un mes de historial.
+- El payload repite la misma informacion en datos crudos, intervalos, filas
+  horarias y resumen diario. En una muestra de 26 lecturas, las filas horarias
+  ocuparon 18.958 de 31.480 caracteres; los huecos largos multiplican esas filas
+  y explican el payload real de 85.275 caracteres.
+- Recomendacion: conservar Firestore como fuente oficial y Excel como reporte;
+  no eliminar datos reales de Firestore despues de exportarlos. GitHub debe
+  contener solamente un lote pendiente y un cursor de confirmacion.
+- Diseno propuesto: consulta incremental por `createdAt` de servidor mas ID,
+  contexto limitado por caldera y fecha, lotes menores a 45.000 caracteres,
+  confirmacion de Power Automate mediante `Update an Issue` y limpieza del
+  cuerpo despues de una escritura exitosa en Excel.
+- Optimizar despues la app: reemplazar lecturas remotas de hasta 10.000
+  documentos por consultas de ultima lectura, intervalo objetivo y paginas
+  pequenas para administracion.
+- Estado: analisis solamente; no se modificaron el exportador, workflow,
+  Power Automate, Firestore ni Office Script productivos.
+
+### 2026-07-27 - Recuperacion acotada de 26 lecturas
+
+- Solicitud: recuperar en el Excel maestro las 26 lecturas reales de Pablo
+  Loachamin que permanecen seguras en Firestore.
+- Exportador: la consulta incremental ahora se ejecuta en Firestore por
+  `createdAt`; se agrego recuperacion manual por fecha local y contexto minimo
+  anterior/posterior por caldera. Los contextos solo intervienen en los
+  calculos y no se duplican en la tabla de datos crudos.
+- Transporte: el workflow privado acepta `payload_date` para procesar un solo
+  dia. El payload sintetico de 72 lecturas quedo en 52.091 caracteres, debajo
+  del limite de 60.000.
+- Excel: se reemplazo y guardo en produccion el Office Script
+  `EE - Sincronizar consumos de calderas`. Puede recuperar el mapeo de filas
+  administradas desde el 2026-07-24 y mantiene protegida la historia anterior.
+- Despliegues: repositorio publico `main` en `a96f566`; repositorio privado de
+  datos `main` en `b909335`.
+- Pruebas: 10 pruebas unitarias del exportador aprobadas, `py_compile` aprobado
+  y `git diff --check` sin errores.
+- Ejecucion real: se lanzo la recuperacion del 2026-07-24 en GitHub Actions,
+  ejecucion `30293742254`. El nuevo flujo fue utilizado, pero Firestore respondio
+  `429 Quota exceeded`; no se publicaron datos parciales ni se altero Excel.
+- Continuacion: se creo el heartbeat
+  `recuperar-26-lecturas-de-calderas` para las 02:10 de America/Guayaquil.
+  Debe procesar secuencialmente 2026-07-24, 25, 26 y 27, ejecutar Power Automate
+  entre fechas, comprobar las 26 filas sin duplicados y eliminar el heartbeat
+  al concluir.
+
+## Plantilla para futuras entradas
+
+```markdown
+### AAAA-MM-DD - Titulo breve
+
+- Solicitud:
+- Resultado:
+- Archivos principales:
+- Pruebas/builds:
+- Despliegue:
+- Decisiones:
+- Pendientes o riesgos:
+```
