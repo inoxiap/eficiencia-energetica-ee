@@ -719,6 +719,54 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   entre fechas, comprobar las 26 filas sin duplicados y eliminar el heartbeat
   al concluir.
 
+### 2026-07-27 - Flujo eficiente y publicacion 1.2.0
+
+- Solicitud: aplicar el manejo eficiente de datos dentro de los limites
+  gratuitos y publicar la ultima version para Android y web.
+- Exportador: `schemaVersion` subio a 2. Antes de consultar Firestore revisa el
+  estado del issue privado; si existe un lote `ready`, termina sin volver a
+  leer ni sobrescribir datos. Tras una confirmacion consulta solamente
+  `createdAt > cursor` en el servidor. Los payloads grandes se dividen
+  automaticamente por fecha y conservan `remainingDates` hasta completar la
+  entrega.
+- Confirmacion: el Office Script devuelve un payload `acknowledged` despues de
+  escribir Excel. El flujo productivo
+  `EE - Actualizar Excel maestro desde GitHub` actualiza el issue 1 con ese
+  resultado. La prueba manual real del flujo finalizo correctamente en 16
+  segundos y el issue quedo confirmado con esquema 2.
+- App: las consultas remotas generales de consumos se limitaron a 250
+  documentos recientes. La cache local conserva todos los registros
+  `pending_sync` y hasta 500 registros sincronizados, sin descartar pendientes.
+- Cuotas: se conserva la ejecucion horaria. En estado confirmado no consulta
+  Firestore; cuando hay datos usa una consulta incremental. El consumo
+  estimado de GitHub Actions permanece por debajo de los 2.000 minutos
+  mensuales incluidos y Power Automate queda muy por debajo de su perfil bajo.
+  Firestore sigue siendo la fuente oficial y no se eliminan registros reales
+  despues de exportarlos.
+- Version: Flutter `1.2.0+6`, commit fuente `a668946`. El APK release pesa
+  55.915.778 bytes, fue validado con `apksigner`, instalado con exito en
+  `EE_Pixel_8_API_35_x64` y abierto sin problemas.
+- Publicacion Android:
+  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/tag/v1.2.0`.
+  Descarga directa:
+  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/download/v1.2.0/eficiencia-energetica-ee-1.2.0-build6.apk`.
+- Publicacion web: `https://eficiencia-energetica-ee.web.app`. Hosting,
+  reglas e indices de Firestore fueron desplegados. La ruta raiz y los archivos
+  de arranque usan `no-cache` para mostrar versiones nuevas de inmediato sin
+  desactivar la cache de todos los recursos estaticos.
+- Actualizaciones: `app_config/mobile_app` quedo habilitado con build 6, URL
+  Android al APK y URL web al Hosting. Las instalaciones Android anteriores
+  mostraran confirmacion de actualizacion; las versiones web anteriores
+  ofreceran recargar. La actualizacion no es forzada.
+- Pruebas/builds: `flutter analyze` sin hallazgos; 45 pruebas Flutter, 14 del
+  exportador, 7 del dashboard y 5 de Functions aprobadas; Functions compilo;
+  `flutter build web --release` y `flutter build apk --release` finalizaron
+  correctamente. APK y web respondieron HTTP 200 y la web fue comprobada
+  visualmente en produccion.
+- Pendiente: la recuperacion de las 26 lecturas de Pablo continua programada
+  para despues del reinicio de cuota de Firestore. No eliminar el heartbeat
+  `recuperar-26-lecturas-de-calderas` hasta comprobar los datos en Excel.
+
 ## Plantilla para futuras entradas
 
 ```markdown
