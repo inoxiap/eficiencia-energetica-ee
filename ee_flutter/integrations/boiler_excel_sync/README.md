@@ -37,12 +37,24 @@ codigo: los datos operativos solo pueden viajar por el repositorio privado.
 fila historica no administrada ya ocupa la misma fecha/caldera, el script la
 registra como conflicto y no la sobrescribe.
 
+Las filas del 24 de julio de 2026 en adelante pueden haber sido creadas por una
+version anterior del mismo Office Script sin quedar registradas en
+`App_Mapeo_Regist`. En ese caso, el script reconoce la fecha como parte del
+periodo administrado por la app, recupera el mapeo y actualiza la fila existente
+sin duplicarla. Las coincidencias anteriores a esa fecha continúan protegidas
+como historial corporativo.
+
 La sincronizacion es incremental e idempotente:
 
 - Una clave nueva crea una fila.
 - Una clave ya conocida actualiza su fila.
+- Una fila de la app sin mapeo recupera su clave y vuelve a ser administrada.
 - Ejecutar dos veces el mismo payload no crea duplicados.
 - Las hojas `App_*` acumulan el historial recibido.
+
+El workflow consulta Firestore por `createdAt` del servidor antes de traer el
+contexto minimo de las fechas y calderas afectadas. Esto permite recuperar
+lecturas creadas en la nube con retraso sin recorrer la coleccion completa.
 
 ## Ejecucion local
 
@@ -75,6 +87,12 @@ El unico `Actions secret` requerido es:
 El workflow usa `${{ github.token }}` para actualizar el issue de su mismo
 repositorio. No requiere token personal. El permiso queda limitado a
 `contents: read` e `issues: write`.
+
+Para recuperar una fecha concreta desde `Run workflow`, completar
+`payload_date` con el formato `AAAA-MM-DD`. El exportador incluye solamente las
+lecturas de esa fecha en el payload, pero consulta una lectura anterior y una
+posterior por caldera para conservar los deltas y la distribucion horaria. Cada
+fecha debe pasar por Power Automate antes de publicar la siguiente.
 
 No guardar la cuenta de servicio en Git. El repositorio privado y el issue deben
 existir antes de ejecutar el workflow.

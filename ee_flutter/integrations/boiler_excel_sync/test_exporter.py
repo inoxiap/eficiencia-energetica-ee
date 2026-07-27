@@ -4,7 +4,7 @@ import json
 import os
 import sys
 import unittest
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from unittest.mock import Mock, patch
 
 from exporter import (
@@ -135,6 +135,37 @@ class ExporterTests(unittest.TestCase):
         self.assertAlmostEqual(
             payload["datasets"]["daily"]["rows"][0][13],
             30,
+        )
+
+    def test_date_payload_uses_context_without_repeating_context_as_raw(self):
+        previous = reading("previous", "2026-07-24T04:00:00Z", 100, 200)
+        first = reading("first", "2026-07-24T06:00:00Z", 120, 240)
+        second = reading("second", "2026-07-24T08:00:00Z", 140, 280)
+        following = reading("following", "2026-07-25T06:00:00Z", 360, 720)
+
+        payload = build_power_automate_payload(
+            [previous, first, second, following],
+            target_local_date=date(2026, 7, 24),
+        )
+
+        self.assertEqual(payload["mode"], "date")
+        self.assertEqual(payload["affectedDates"], ["2026-07-24"])
+        self.assertEqual(
+            [row[0] for row in payload["datasets"]["raw"]["rows"]],
+            ["first", "second"],
+        )
+        self.assertEqual(
+            [row[0] for row in payload["datasets"]["intervals"]["rows"]],
+            ["first", "second"],
+        )
+        hourly_rows = payload["datasets"]["hourly"]["rows"]
+        self.assertTrue(hourly_rows)
+        self.assertTrue(
+            all(row[2] == "2026-07-24" for row in hourly_rows)
+        )
+        self.assertEqual(
+            payload["datasets"]["daily"]["rows"][0][0],
+            "2026-07-24|alfa_laval_1200",
         )
 
     def test_start_of_local_day_uses_guayaquil_timezone(self):

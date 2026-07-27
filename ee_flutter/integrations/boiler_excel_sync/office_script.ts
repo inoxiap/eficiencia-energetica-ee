@@ -32,6 +32,7 @@ const MASTER_SHEET = "Regist_inform";
 const FIRST_MASTER_DATA_ROW_INDEX = 12;
 const MASTER_COLUMN_COUNT = 16;
 const MAPPING_SHEET = "App_Mapeo_Regist";
+const FIRST_APP_SYNC_DATE = "2026-07-24";
 
 function main(workbook: ExcelScript.Workbook, payloadJson: string): string {
   const payload = JSON.parse(payloadJson) as SyncPayload;
@@ -246,7 +247,10 @@ function syncMasterRows(
       continue;
     }
     const mapped = mapping.get(syncKey);
-    if (mapped?.status === "conflict_historical") {
+    if (
+      mapped?.status === "conflict_historical"
+      && !isRecoverableAppRow(syncKey)
+    ) {
       conflicts += 1;
       continue;
     }
@@ -261,7 +265,20 @@ function syncMasterRows(
       conflicts += 1;
       continue;
     }
-    if (existingRows.has(syncKey)) {
+    const existingRowIndex = existingRows.get(syncKey);
+    if (
+      existingRowIndex !== undefined
+      && isRecoverableAppRow(syncKey)
+    ) {
+      writeMasterRow(master, existingRowIndex, row, false);
+      mapping.set(syncKey, {
+        rowNumber: existingRowIndex + 1,
+        status: "managed",
+      });
+      updated += 1;
+      continue;
+    }
+    if (existingRowIndex !== undefined) {
       mapping.set(syncKey, { rowNumber: 0, status: "conflict_historical" });
       conflicts += 1;
       continue;
@@ -297,6 +314,12 @@ function readMapping(sheet: ExcelScript.Worksheet): Map<string, MappingEntry> {
     }
   }
   return result;
+}
+
+function isRecoverableAppRow(syncKey: string): boolean {
+  const dateIso = syncKey.slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateIso)
+    && dateIso >= FIRST_APP_SYNC_DATE;
 }
 
 function writeMapping(

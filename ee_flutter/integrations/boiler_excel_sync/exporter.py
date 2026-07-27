@@ -387,9 +387,24 @@ def build_daily_summaries(
     ]
 
 
-def load_firestore_readings() -> list[Reading]:
+def _local_date_bounds_utc(day: date) -> tuple[datetime, datetime]:
+    start = datetime(
+        day.year,
+        day.month,
+        day.day,
+        tzinfo=LOCAL_ZONE,
+    ).astimezone(timezone.utc)
+    return start, start + timedelta(days=1)
+
+
+def load_firestore_readings(
+    *,
+    changed_since_utc: datetime | None = None,
+    target_local_date: date | None = None,
+) -> list[Reading]:
     import firebase_admin
     from firebase_admin import credentials, firestore
+    from google.cloud.firestore_v1.base_query import FieldFilter
 
     if not firebase_admin._apps:
         credential_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
@@ -400,16 +415,97 @@ def load_firestore_readings() -> list[Reading]:
         else:
             firebase_admin.initialize_app()
     client = firestore.client()
-    documents = (
-        client.collection(COLLECTION_NAME).order_by("recordedAt").stream()
+    collection = client.collection(COLLECTION_NAME)
+    readings_by_id: dict[str, Reading] = {}
+
+    def add_documents(documents: Iterable[Any]) -> None:
+        for document in documents:
+            try:
+                readings_by_id[document.id] = reading_from_dict(
+                    document.id,
+                    document.to_dict(),
+                )
+            except ValueError as error:
+                print(f"ADVERTENCIA: {error}")
+
+    if target_local_date is None and changed_since_utc is None:
+        add_documents(collection.order_by("recordedAt").stream())
+        return sorted(
+            readings_by_id.values(),
+            key=lambda reading: (reading.recorded_at, reading.document_id),
+        )
+
+    affected_dates: set[date]
+    affected_boilers: set[str]
+    if target_local_date is not None:
+        start_utc, end_utc = _local_date_bounds_utc(target_local_date)
+        day_documents = (
+            collection.where(
+                filter=FieldFilter("recordedAt", ">=", start_utc)
+            )
+            .where(filter=FieldFilter("recordedAt", "<", end_utc))
+            .order_by("recordedAt")
+            .stream()
+        )
+        add_documents(day_documents)
+        if not readings_by_id:
+            return []
+        affected_dates = {target_local_date}
+        affected_boilers = {
+            reading.boiler_id for reading in readings_by_id.values()
+        }
+    else:
+        cutoff = changed_since_utc.astimezone(timezone.utc)
+        changed_documents = (
+            collection.where(filter=FieldFilter("createdAt", ">=", cutoff))
+            .order_by("createdAt")
+            .stream()
+        )
+        add_documents(changed_documents)
+        if not readings_by_id:
+            return []
+        affected_dates = {
+            reading.recorded_at.astimezone(LOCAL_ZONE).date()
+            for reading in readings_by_id.values()
+        }
+        affected_boilers = {
+            reading.boiler_id for reading in readings_by_id.values()
+        }
+
+    context_start, _ = _local_date_bounds_utc(min(affected_dates))
+    _, context_end = _local_date_bounds_utc(max(affected_dates))
+    context_documents = (
+        collection.where(
+            filter=FieldFilter("recordedAt", ">=", context_start)
+        )
+        .where(filter=FieldFilter("recordedAt", "<", context_end))
+        .order_by("recordedAt")
+        .stream()
     )
-    readings: list[Reading] = []
-    for document in documents:
-        try:
-            readings.append(reading_from_dict(document.id, document.to_dict()))
-        except ValueError as error:
-            print(f"ADVERTENCIA: {error}")
-    return readings
+    add_documents(context_documents)
+
+    for boiler_id in sorted(affected_boilers):
+        previous_documents = (
+            collection.where(filter=FieldFilter("boilerId", "==", boiler_id))
+            .where(filter=FieldFilter("recordedAt", "<", context_start))
+            .order_by("recordedAt", direction=firestore.Query.DESCENDING)
+            .limit(1)
+            .stream()
+        )
+        add_documents(previous_documents)
+        next_documents = (
+            collection.where(filter=FieldFilter("boilerId", "==", boiler_id))
+            .where(filter=FieldFilter("recordedAt", ">=", context_end))
+            .order_by("recordedAt")
+            .limit(1)
+            .stream()
+        )
+        add_documents(next_documents)
+
+    return sorted(
+        readings_by_id.values(),
+        key=lambda reading: (reading.recorded_at, reading.document_id),
+    )
 
 
 def load_json_readings(input_path: Path) -> list[Reading]:
@@ -754,13 +850,37 @@ def build_power_automate_payload(
     readings: list[Reading],
     *,
     changed_since_utc: datetime | None = None,
+    target_local_date: date | None = None,
 ) -> dict[str, Any]:
     intervals = build_intervals(readings)
     allocations = allocate_hourly(intervals)
     summaries = build_daily_summaries(readings, allocations)
     payload_readings = readings
     affected_days: set[date] | None = None
-    if changed_since_utc is not None:
+    if target_local_date is not None:
+        affected_days = {target_local_date}
+        payload_readings = [
+            reading
+            for reading in readings
+            if reading.recorded_at.astimezone(LOCAL_ZONE).date()
+            == target_local_date
+        ]
+        intervals = [
+            interval
+            for interval in intervals
+            if interval.reading.recorded_at.astimezone(LOCAL_ZONE).date()
+            == target_local_date
+        ]
+        allocations = [
+            allocation
+            for allocation in allocations
+            if allocation.hour_start.astimezone(LOCAL_ZONE).date()
+            == target_local_date
+        ]
+        summaries = [
+            summary for summary in summaries if summary.day == target_local_date
+        ]
+    elif changed_since_utc is not None:
         cutoff = changed_since_utc.astimezone(timezone.utc)
         payload_readings = [
             reading
@@ -979,10 +1099,18 @@ def build_power_automate_payload(
         "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
         "timezone": "America/Guayaquil",
         "collection": COLLECTION_NAME,
-        "mode": "incremental" if changed_since_utc else "full",
-        "windowStartUtc": (
-            changed_since_utc.astimezone(timezone.utc).isoformat()
+        "mode": (
+            "date"
+            if target_local_date is not None
+            else "incremental"
             if changed_since_utc
+            else "full"
+        ),
+        "windowStartUtc": (
+            _local_date_bounds_utc(target_local_date)[0].isoformat()
+            if target_local_date is not None
+            else changed_since_utc.astimezone(timezone.utc).isoformat()
+            if changed_since_utc is not None
             else ""
         ),
         "affectedDates": (
@@ -1067,11 +1195,26 @@ def main() -> None:
         action="store_true",
     )
     parser.add_argument("--full-payload", action="store_true")
+    parser.add_argument(
+        "--payload-date",
+        type=date.fromisoformat,
+        help="Publica solamente la fecha local indicada (AAAA-MM-DD).",
+    )
     args = parser.parse_args()
+    if args.full_payload and args.payload_date is not None:
+        parser.error("--full-payload y --payload-date no pueden combinarse")
+    changed_since_utc = (
+        None
+        if args.full_payload or args.payload_date is not None
+        else start_of_local_day_utc()
+    )
     readings = (
         load_json_readings(args.input_json)
         if args.input_json
-        else load_firestore_readings()
+        else load_firestore_readings(
+            changed_since_utc=changed_since_utc,
+            target_local_date=args.payload_date,
+        )
     )
     if args.output:
         build_workbook(readings, args.output)
@@ -1079,9 +1222,8 @@ def main() -> None:
     if not args.skip_publish:
         payload = build_power_automate_payload(
             readings,
-            changed_since_utc=(
-                None if args.full_payload else start_of_local_day_utc()
-            ),
+            changed_since_utc=changed_since_utc,
+            target_local_date=args.payload_date,
         )
         publish_payload_to_github_issue(payload)
         print(

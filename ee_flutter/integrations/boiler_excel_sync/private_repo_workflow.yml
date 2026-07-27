@@ -2,6 +2,11 @@ name: Sincronizar consumos de calderas con Excel
 
 on:
   workflow_dispatch:
+    inputs:
+      payload_date:
+        description: Fecha local a recuperar (AAAA-MM-DD)
+        required: false
+        type: string
   schedule:
     - cron: "17 * * * *"
 
@@ -41,4 +46,10 @@ jobs:
           EE_DATA_REPOSITORY: ${{ github.repository }}
           EE_DATA_ISSUE_NUMBER: "1"
           EE_DATA_REPO_TOKEN: ${{ github.token }}
-        run: python exporter.py
+          EE_PAYLOAD_DATE: ${{ inputs.payload_date }}
+        run: |
+          if [ -n "$EE_PAYLOAD_DATE" ]; then
+            python exporter.py --payload-date "$EE_PAYLOAD_DATE"
+          else
+            python exporter.py
+          fi
