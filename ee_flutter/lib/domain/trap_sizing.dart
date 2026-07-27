@@ -121,6 +121,7 @@ class TrapCalculation {
 
 class TrapRule {
   const TrapRule({
+    required this.id,
     required this.name,
     required this.condition,
     required this.trapType,
@@ -131,6 +132,7 @@ class TrapRule {
     required this.calculate,
   });
 
+  final String id;
   final String name;
   final String condition;
   final String trapType;
@@ -144,6 +146,7 @@ class TrapRule {
 List<TrapRule> createTrapRules() {
   return [
     TrapRule(
+      id: 'tracing',
       name: 'Tracing',
       condition: 'Baja carga',
       trapType: 'Termodinamica bimetalica',
@@ -159,6 +162,7 @@ List<TrapRule> createTrapRules() {
       ),
     ),
     TrapRule(
+      id: 'tank_coil',
       name: 'Serpentin de tanque',
       condition: 'Transferencia de calor',
       trapType: 'Flotador termostatica',
@@ -200,6 +204,7 @@ List<TrapRule> createTrapRules() {
           _batchHeatingCalculation(values, 'serpentin de tanque'),
     ),
     TrapRule(
+      id: 'kettle_jacket',
       name: 'Chaqueta o Marmita',
       condition: 'Carga variable',
       trapType: 'Flotador termostatica',
@@ -242,6 +247,7 @@ List<TrapRule> createTrapRules() {
           _batchHeatingCalculation(values, 'chaqueta/marmita'),
     ),
     TrapRule(
+      id: 'heavy_duty_jacket',
       name: 'Chaqueta trabajo pesado',
       condition: 'Drenaje',
       trapType: 'Balde invertido',
@@ -283,6 +289,7 @@ List<TrapRule> createTrapRules() {
           _batchHeatingCalculation(values, 'chaqueta de trabajo pesado'),
     ),
     TrapRule(
+      id: 'main_boiler_header',
       name: 'Distribuidor principal de caldero',
       condition: 'Drenaje principal con posible arrastre',
       trapType: 'Balde invertido',
@@ -331,6 +338,7 @@ List<TrapRule> createTrapRules() {
       calculate: _boilerHeaderCalculation,
     ),
     TrapRule(
+      id: 'steam_header',
       name: 'Distribuidor de vapor',
       condition: 'Drenaje de distribucion secundaria',
       trapType: 'Balde invertido',
@@ -379,6 +387,7 @@ List<TrapRule> createTrapRules() {
       calculate: _secondaryDistributorCalculation,
     ),
     TrapRule(
+      id: 'heat_exchanger',
       name: 'Intercambiador de calor',
       condition: 'Alta carga variable',
       trapType: 'Flotador termostatica',
@@ -426,6 +435,7 @@ List<TrapRule> createTrapRules() {
       calculate: _heatExchangerCalculation,
     ),
     TrapRule(
+      id: 'steam_main_drain_leg',
       name: 'Linea principal de vapor (Pierna de condensado)',
       condition: 'Drenaje de linea',
       trapType: 'Balde invertido',
@@ -475,6 +485,17 @@ FieldSpec directCondensateField() {
     100,
     1,
     0,
+  );
+}
+
+TrapCalculation calculateDirectCondensate(double litersPerMinute) {
+  final condensateKgH =
+      litersPerMinute * TrapConstants.condensateDensityKgL * 60;
+  return TrapCalculation(
+    condensateKgH: condensateKgH,
+    explanation:
+        'Medicion directa de ${litersPerMinute.toStringAsFixed(1)} L/min, '
+        'convertida con densidad aproximada de condensado de 1.0 kg/L.',
   );
 }
 

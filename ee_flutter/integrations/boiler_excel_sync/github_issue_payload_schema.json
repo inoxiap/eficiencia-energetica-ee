@@ -8,6 +8,7 @@
     "mode",
     "windowStartUtc",
     "affectedDates",
+    "delivery",
     "datasets"
   ],
   "properties": {
@@ -27,7 +28,9 @@
       "type": "string",
       "enum": [
         "incremental",
-        "full"
+        "date",
+        "full",
+        "acknowledgement"
       ]
     },
     "windowStartUtc": {
@@ -37,6 +40,50 @@
       "type": "array",
       "items": {
         "type": "string"
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "required": [
+        "status",
+        "batchId",
+        "cursorStartUtc",
+        "cursorEndUtc",
+        "targetLocalDate",
+        "rawRowCount"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "acknowledged"
+          ]
+        },
+        "batchId": {
+          "type": "string"
+        },
+        "cursorStartUtc": {
+          "type": "string"
+        },
+        "cursorEndUtc": {
+          "type": "string"
+        },
+        "targetLocalDate": {
+          "type": "string"
+        },
+        "rawRowCount": {
+          "type": "integer"
+        },
+        "remainingDates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "acknowledgedAtUtc": {
+          "type": "string"
+        }
       }
     },
     "datasets": {

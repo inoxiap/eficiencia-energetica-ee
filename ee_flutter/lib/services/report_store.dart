@@ -45,16 +45,28 @@ class HybridReportStore implements ReportStore {
 
   @override
   Future<void> saveReport(BarePipeReport report) async {
-    await localStore.saveReport(report);
     try {
       await remoteStore.saveReport(report).timeout(remoteTimeout);
+      await localStore.saveReport(report.copyWith(status: 'synced'));
     } on TimeoutException {
+      await localStore.saveReport(
+        report.copyWith(
+          status: 'pending_sync',
+          syncError: 'Firebase no respondio a tiempo.',
+        ),
+      );
       throw const ReportSyncException(
-        'Reporte guardado en este telefono. Firebase no respondio a tiempo; revisa que Cloud Firestore este creado y habilitado.',
+        'La evidencia se subio, pero la nube no confirmo el reporte. Quedo pendiente de sincronizacion y puede reintentarse.',
       );
     } catch (error) {
+      await localStore.saveReport(
+        report.copyWith(
+          status: 'pending_sync',
+          syncError: 'Firebase no confirmo el reporte.',
+        ),
+      );
       throw ReportSyncException(
-        'Reporte guardado en este telefono. Firebase no sincronizo; revisa que Cloud Firestore este creado y habilitado.',
+        'La evidencia se subio, pero la nube no confirmo el reporte. Quedo pendiente de sincronizacion y puede reintentarse.',
       );
     }
   }

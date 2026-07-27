@@ -1,0 +1,238 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.role == 'admin'
+        || (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        )
+      );
+    }
+
+    function createsOwnRecord() {
+      return signedIn()
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.source == 'manual'
+        && request.resource.data.platform in ['android', 'web']
+        && request.resource.data.schemaVersion is int;
+    }
+
+    function readsOwnRecord() {
+      return signedIn() && resource.data.createdByUid == request.auth.uid;
+    }
+
+    function updatesMaintenanceWorkflow() {
+      return signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'workOrderCreated',
+          'workOrderCreatedAt',
+          'workOrderCreatedByUid',
+          'workOrderCreatedByNameSnapshot',
+          'workCompleted',
+          'workCompletedAt',
+          'workCompletedByUid',
+          'workCompletedByNameSnapshot',
+          'status',
+          'updatedAt',
+          'updatedByUid'
+        ])
+        && request.resource.data.workOrderCreated is bool
+        && request.resource.data.workCompleted is bool
+        && (!request.resource.data.workCompleted || request.resource.data.workOrderCreated)
+        && request.resource.data.status in ['open', 'work_order_created', 'completed']
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+    }
+
+    function validCleaverDistributorPressures(values) {
+      return values is map
+        && values.keys().hasOnly([
+          'omega',
+          'lambda',
+          'omicron',
+          'beta',
+          'hydrogenation'
+        ])
+        && values.keys().hasAll([
+          'omega',
+          'lambda',
+          'omicron',
+          'beta',
+          'hydrogenation'
+        ])
+        && values.omega is number && values.omega >= 0
+        && values.lambda is number && values.lambda >= 0
+        && values.omicron is number && values.omicron >= 0
+        && values.beta is number && values.beta >= 0
+        && values.hydrogenation is number && values.hydrogenation >= 0;
+    }
+
+    function validDistral900DistributorPressures(values) {
+      return values is map
+        && values.keys().hasOnly([
+          'soapPlant',
+          'desmetTirtioux',
+          'newLine',
+          'cleaverInlet',
+          'bleachers',
+          'marino',
+          'padLoading',
+          'receptionTanks',
+          'waterTank4'
+        ])
+        && values.keys().hasAll([
+          'soapPlant',
+          'desmetTirtioux',
+          'newLine',
+          'cleaverInlet',
+          'bleachers',
+          'marino',
+          'padLoading',
+          'receptionTanks',
+          'waterTank4'
+        ])
+        && values.soapPlant is number && values.soapPlant >= 0
+        && values.desmetTirtioux is number && values.desmetTirtioux >= 0
+        && values.newLine is number && values.newLine >= 0
+        && values.cleaverInlet is number && values.cleaverInlet >= 0
+        && values.bleachers is number && values.bleachers >= 0
+        && values.marino is number && values.marino >= 0
+        && values.padLoading is number && values.padLoading >= 0
+        && values.receptionTanks is number && values.receptionTanks >= 0
+        && values.waterTank4 is number && values.waterTank4 >= 0;
+    }
+
+    match /app_config/{document} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /catalog_sections/{document} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /motor_reference_tables/{document} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.id == uid
+        && request.resource.data.displayName is string
+        && request.resource.data.nationalId is string
+        && request.resource.data.nationalId.size() == 10
+        && request.resource.data.role == 'operator'
+        && request.resource.data.active == true
+        && request.resource.data.createdByUid == uid
+        && request.resource.data.updatedByUid == uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.source == 'self_registration';
+      allow update, delete: if false;
+    }
+
+    match /user_private_credentials/{document} {
+      allow read, write: if false;
+    }
+
+    match /audit_logs/{document} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /steam_trap_sizing_reports/{document} {
+      allow create: if createsOwnRecord()
+        && request.resource.data.sectionId is string
+        && request.resource.data.equipmentName is string
+        && request.resource.data.calculationMethod
+          in ['direct', 'indirect', 'direct_selection'];
+      allow read: if isAdmin() || readsOwnRecord();
+      allow update, delete: if false;
+    }
+
+    match /bare_pipe_reports/{document} {
+      allow create: if createsOwnRecord()
+        && request.resource.data.sectionId is string
+        && request.resource.data.equipmentName is string
+        && request.resource.data.photoProvider == 'cloudinary';
+      allow read: if signedIn();
+      allow update: if updatesMaintenanceWorkflow();
+      allow delete: if false;
+    }
+
+    match /leak_reports/{document} {
+      allow create: if createsOwnRecord()
+        && request.resource.data.sectionId is string
+        && request.resource.data.equipmentName is string
+        && request.resource.data.leakType in ['steam', 'oil', 'water', 'air']
+        && request.resource.data.tagNumber is string
+        && request.resource.data.tagNumber.size() > 0
+        && request.resource.data.photoProvider == 'cloudinary'
+        && request.resource.data.workOrderCreated == false
+        && request.resource.data.workCompleted == false;
+      allow read: if signedIn();
+      allow update: if updatesMaintenanceWorkflow();
+      allow delete: if false;
+    }
+
+    match /boiler_consumption_readings/{document} {
+      allow create: if createsOwnRecord()
+        && request.resource.data.boilerId is string
+        && request.resource.data.readingMode == 'cumulative_meter'
+        && (
+          request.resource.data.schemaVersion == 1
+          || (
+            request.resource.data.schemaVersion >= 2
+            && request.resource.data.boilerPressurePsi is number
+            && request.resource.data.boilerPressurePsi >= 0
+            && request.resource.data.boilerPressureUnit == 'psi'
+          )
+        )
+        && !request.resource.data.keys().hasAny(['operatorPin']);
+      allow read: if isAdmin() || readsOwnRecord();
+      allow update, delete: if false;
+    }
+
+    match /steam_pressure_readings/{document} {
+      allow create: if createsOwnRecord()
+        && request.resource.data.pressureUnit == 'psi'
+        && request.resource.data.sectionId == 'servicios_industriales'
+        && request.resource.data.equipmentName is string
+        && validCleaverDistributorPressures(
+          request.resource.data.cleaverDistributorPsi
+        )
+        && validDistral900DistributorPressures(
+          request.resource.data.distral900DistributorPsi
+        );
+      allow read: if isAdmin() || readsOwnRecord();
+      allow update, delete: if false;
+    }
+
+    match /pump_energy_surveys/{document} {
+      allow create: if createsOwnRecord()
+        && request.resource.data.assetId is string
+        && request.resource.data.surveyType
+          in ['baseline', 'post_improvement', 'verification'];
+      allow read: if signedIn();
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

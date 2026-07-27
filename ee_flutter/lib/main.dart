@@ -4,21 +4,50 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dial_knob/flutter_dial_knob.dart' as industrial_knob;
+import 'package:geekyants_flutter_gauges/geekyants_flutter_gauges.dart'
+    as industrial_gauge;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:segment_display/segment_display.dart' as segment_display;
+import 'package:sleek_circular_slider/sleek_circular_slider.dart'
+    as circular_instrument;
 
 import 'domain/bare_pipe.dart';
 import 'domain/boiler_consumption.dart';
+import 'domain/leak_report.dart';
+import 'domain/maintenance_report.dart';
+import 'domain/section_catalog.dart';
+import 'domain/steam_pressure_reading.dart';
 import 'domain/trap_sizing.dart';
+import 'domain/trap_sizing_report.dart';
 import 'firebase_options.dart';
+import 'screens/pump_survey_screen.dart';
 import 'services/app_update_service.dart';
 import 'services/cloudinary_service.dart';
 import 'services/consumption_store.dart';
 import 'services/deferred_firestore_consumption_store.dart';
 import 'services/deferred_firestore_report_store.dart';
+import 'services/firebase_auth_plugin_registration.dart';
+import 'services/operator_session.dart';
+import 'services/motor_reference_store.dart';
+import 'services/maintenance_report_store.dart';
+import 'services/operator_auth_service.dart';
+import 'services/pressure_reading_store.dart';
 import 'services/report_store.dart';
+import 'services/pump_survey_store.dart';
+import 'services/trap_sizing_report_store.dart';
+import 'widgets/home_navigation_bar.dart';
+
+part 'screens/leak_report_screen.dart';
+part 'screens/maintenance_history_screen.dart';
+part 'screens/pressure_entry_tab.dart';
+part 'screens/input_controls_playground_screen.dart';
 
 const brandRed = Color(0xffe3263a);
 const brandRedDark = Color(0xffb8192a);
@@ -27,29 +56,71 @@ const textColor = Color(0xff20272b);
 const mutedColor = Color(0xff5b6970);
 const borderColor = Color(0xffdae2e5);
 const tealColor = Color(0xff2f6f73);
+const useFirebaseEmulators = bool.fromEnvironment('USE_FIREBASE_EMULATORS');
+
+Future<FirebaseApp> _initializeFirebase() async {
+  final app = await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  if (useFirebaseEmulators) {
+    final host = kIsWeb ? '127.0.0.1' : '10.0.2.2';
+    await FirebaseAuth.instance.useAuthEmulator(host, 9099);
+    FirebaseFirestore.instance.useFirestoreEmulator(host, 8081);
+  }
+  return app;
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final firebaseReady = Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  registerFirebaseAuthPlugin();
+  final firebaseReady = _initializeFirebase();
   firebaseReady.ignore();
   final localStore = LocalReportStore();
   final localConsumptionStore = LocalConsumptionStore();
+  final operatorSession = FirebaseOperatorSession(firebaseReady: firebaseReady);
+  final operatorAuthService = FirebaseOperatorAuthService(
+    firebaseReady: firebaseReady,
+  );
+  final maintenanceReportStore = FirebaseMaintenanceReportStore(
+    firebaseReady: firebaseReady,
+    operatorSession: operatorSession,
+  );
   runApp(
     EeApp(
       reportStore: HybridReportStore(
         localStore: localStore,
-        remoteStore: DeferredFirestoreReportStore(firebaseReady: firebaseReady),
+        remoteStore: DeferredFirestoreReportStore(
+          firebaseReady: firebaseReady,
+          operatorSession: operatorSession,
+        ),
       ),
       consumptionStore: HybridConsumptionStore(
         localStore: localConsumptionStore,
         remoteStore: DeferredFirestoreConsumptionStore(
           firebaseReady: firebaseReady,
+          operatorSession: operatorSession,
         ),
         remoteTimeout: const Duration(seconds: 35),
       ),
+      pressureReadingStore: FirebasePressureReadingStore(
+        firebaseReady: firebaseReady,
+        operatorSession: operatorSession,
+      ),
       cloudinaryService: CloudinaryService(),
+      trapSizingReportStore: FirebaseTrapSizingReportStore(
+        firebaseReady: firebaseReady,
+        operatorSession: operatorSession,
+      ),
+      operatorSession: operatorSession,
+      operatorAuthService: operatorAuthService,
+      pumpSurveyStore: FirebasePumpSurveyStore(
+        firebaseReady: firebaseReady,
+        operatorSession: operatorSession,
+      ),
+      motorReferenceStore: FirebaseMotorReferenceStore(
+        firebaseReady: firebaseReady,
+      ),
+      maintenanceReportStore: maintenanceReportStore,
       updateService: AppUpdateService(firebaseReady: firebaseReady),
     ),
   );
@@ -61,6 +132,13 @@ class EeApp extends StatelessWidget {
     required this.consumptionStore,
     required this.cloudinaryService,
     required this.updateService,
+    this.trapSizingReportStore = const DisabledTrapSizingReportStore(),
+    this.operatorSession = const DisabledOperatorSession(),
+    this.operatorAuthService = const DisabledOperatorAuthService(),
+    this.pressureReadingStore = const DisabledPressureReadingStore(),
+    this.pumpSurveyStore = const DisabledPumpSurveyStore(),
+    this.motorReferenceStore = const DisabledMotorReferenceStore(),
+    this.maintenanceReportStore = const DisabledMaintenanceReportStore(),
     super.key,
   });
 
@@ -68,6 +146,13 @@ class EeApp extends StatelessWidget {
   final ConsumptionStore consumptionStore;
   final CloudinaryService cloudinaryService;
   final AppUpdateService updateService;
+  final TrapSizingReportStore trapSizingReportStore;
+  final OperatorSession operatorSession;
+  final OperatorAuthService operatorAuthService;
+  final PressureReadingStore pressureReadingStore;
+  final PumpSurveyStore pumpSurveyStore;
+  final MotorReferenceStore motorReferenceStore;
+  final MaintenanceReportStore maintenanceReportStore;
 
   @override
   Widget build(BuildContext context) {
@@ -105,6 +190,13 @@ class EeApp extends StatelessWidget {
         consumptionStore: consumptionStore,
         cloudinaryService: cloudinaryService,
         updateService: updateService,
+        trapSizingReportStore: trapSizingReportStore,
+        operatorSession: operatorSession,
+        operatorAuthService: operatorAuthService,
+        pressureReadingStore: pressureReadingStore,
+        pumpSurveyStore: pumpSurveyStore,
+        motorReferenceStore: motorReferenceStore,
+        maintenanceReportStore: maintenanceReportStore,
       ),
     );
   }
@@ -116,6 +208,13 @@ class SplashGate extends StatefulWidget {
     required this.consumptionStore,
     required this.cloudinaryService,
     required this.updateService,
+    required this.trapSizingReportStore,
+    required this.operatorSession,
+    required this.operatorAuthService,
+    required this.pressureReadingStore,
+    required this.pumpSurveyStore,
+    required this.motorReferenceStore,
+    required this.maintenanceReportStore,
     super.key,
   });
 
@@ -123,6 +222,13 @@ class SplashGate extends StatefulWidget {
   final ConsumptionStore consumptionStore;
   final CloudinaryService cloudinaryService;
   final AppUpdateService updateService;
+  final TrapSizingReportStore trapSizingReportStore;
+  final OperatorSession operatorSession;
+  final OperatorAuthService operatorAuthService;
+  final PressureReadingStore pressureReadingStore;
+  final PumpSurveyStore pumpSurveyStore;
+  final MotorReferenceStore motorReferenceStore;
+  final MaintenanceReportStore maintenanceReportStore;
 
   @override
   State<SplashGate> createState() => _SplashGateState();
@@ -160,6 +266,13 @@ class _SplashGateState extends State<SplashGate> {
           reportStore: widget.reportStore,
           consumptionStore: widget.consumptionStore,
           cloudinaryService: widget.cloudinaryService,
+          trapSizingReportStore: widget.trapSizingReportStore,
+          operatorSession: widget.operatorSession,
+          operatorAuthService: widget.operatorAuthService,
+          pressureReadingStore: widget.pressureReadingStore,
+          pumpSurveyStore: widget.pumpSurveyStore,
+          motorReferenceStore: widget.motorReferenceStore,
+          maintenanceReportStore: widget.maintenanceReportStore,
         ),
         IgnorePointer(
           ignoring: !_showSplash,
@@ -201,36 +314,158 @@ class _SplashGateState extends State<SplashGate> {
   }
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({
     required this.reportStore,
     required this.consumptionStore,
     required this.cloudinaryService,
+    required this.trapSizingReportStore,
+    required this.operatorSession,
+    required this.operatorAuthService,
+    required this.pressureReadingStore,
+    required this.pumpSurveyStore,
+    required this.motorReferenceStore,
+    required this.maintenanceReportStore,
     super.key,
   });
 
   final ReportStore reportStore;
   final ConsumptionStore consumptionStore;
   final CloudinaryService cloudinaryService;
+  final TrapSizingReportStore trapSizingReportStore;
+  final OperatorSession operatorSession;
+  final OperatorAuthService operatorAuthService;
+  final PressureReadingStore pressureReadingStore;
+  final PumpSurveyStore pumpSurveyStore;
+  final MotorReferenceStore motorReferenceStore;
+  final MaintenanceReportStore maintenanceReportStore;
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  AuthenticatedOperator? _user;
+  var _isLoadingUser = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshUser();
+  }
+
+  Future<void> _refreshUser() async {
+    try {
+      final user = await widget.operatorSession.currentOperator();
+      if (!mounted) return;
+      setState(() {
+        _user = user;
+        _isLoadingUser = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingUser = false);
+    }
+  }
+
+  Future<void> _openUserAccess() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => OperatorAccessScreen(
+          authService: widget.operatorAuthService,
+          operatorSession: widget.operatorSession,
+        ),
+      ),
+    );
+    await _refreshUser();
+  }
+
+  Widget _identityButton() {
+    final label =
+        _user?.displayName ??
+        (_isLoadingUser ? 'Cargando' : 'Ingresar o cambiar usuario');
+    return OutlinedButton(
+      key: const Key('home-user-button'),
+      onPressed: _isLoadingUser ? null : _openUserAccess,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: tealColor,
+        backgroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        side: const BorderSide(color: borderColor),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.badge_outlined, size: 24),
+          const SizedBox(height: 5),
+          Text(
+            label,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 10,
+              height: 1.15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return AppShell(
       children: [
-        const EeHeader(
-          title: 'Eficiencia Energetica EE',
-          subtitle: 'Herramientas de campo para gestion energetica.',
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Expanded(
+                flex: 4,
+                child: EeHeader(
+                  title: 'Eficiencia Energetica EE',
+                  subtitle: 'Herramientas de campo para gestion energetica.',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: _identityButton()),
+            ],
+          ),
         ),
         const SizedBox(height: 18),
         Text('Modulos', style: Theme.of(context).textTheme.titleMediumBold),
         const SizedBox(height: 10),
         EeActionButton(
+          icon: Icons.local_fire_department_outlined,
+          label: 'Ingresar consumos',
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ConsumptionEntryScreen(
+                  consumptionStore: widget.consumptionStore,
+                  pressureReadingStore: widget.pressureReadingStore,
+                  operatorSession: widget.operatorSession,
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+        EeActionButton(
           icon: Icons.tune,
           label: 'Dimensionamiento de trampas',
           onPressed: () {
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const TrapSizingScreen()));
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => TrapSizingScreen(
+                  reportStore: widget.trapSizingReportStore,
+                  operatorSession: widget.operatorSession,
+                ),
+              ),
+            );
           },
         ),
         const SizedBox(height: 10),
@@ -241,8 +476,9 @@ class HomeScreen extends StatelessWidget {
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => BarePipeReportScreen(
-                  reportStore: reportStore,
-                  cloudinaryService: cloudinaryService,
+                  reportStore: widget.reportStore,
+                  cloudinaryService: widget.cloudinaryService,
+                  operatorSession: widget.operatorSession,
                 ),
               ),
             );
@@ -250,13 +486,63 @@ class HomeScreen extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         EeActionButton(
-          icon: Icons.local_fire_department_outlined,
-          label: 'Ingresar consumos',
+          icon: Icons.water_drop_outlined,
+          label: 'Reportar fugas',
           onPressed: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) =>
-                    ConsumptionEntryScreen(consumptionStore: consumptionStore),
+                builder: (_) => LeakReportScreen(
+                  store: widget.maintenanceReportStore,
+                  cloudinaryService: widget.cloudinaryService,
+                  operatorSession: widget.operatorSession,
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+        EeActionButton(
+          icon: Icons.electric_bolt_outlined,
+          label: 'Levantamiento de bombas',
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => PumpSurveyScreen(
+                  store: widget.pumpSurveyStore,
+                  operatorSession: widget.operatorSession,
+                  cloudinaryService: widget.cloudinaryService,
+                  motorReferenceStore: widget.motorReferenceStore,
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+        EeActionButton(
+          icon: Icons.touch_app_outlined,
+          label: 'Tablero de ingreso',
+          isPrimary: false,
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => InputControlsPlaygroundScreen(
+                  consumptionStore: widget.consumptionStore,
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+        EeActionButton(
+          icon: Icons.assignment_turned_in_outlined,
+          label: 'Seguimiento de reportes',
+          isPrimary: false,
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => MaintenanceHistoryScreen(
+                  store: widget.maintenanceReportStore,
+                ),
               ),
             );
           },
@@ -270,8 +556,9 @@ class HomeScreen extends StatelessWidget {
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => AdminScreen(
-                  reportStore: reportStore,
-                  consumptionStore: consumptionStore,
+                  reportStore: widget.reportStore,
+                  consumptionStore: widget.consumptionStore,
+                  maintenanceReportStore: widget.maintenanceReportStore,
                 ),
               ),
             );
@@ -282,8 +569,353 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+class OperatorAccessScreen extends StatefulWidget {
+  const OperatorAccessScreen({
+    required this.authService,
+    required this.operatorSession,
+    super.key,
+  });
+
+  final OperatorAuthService authService;
+  final OperatorSession operatorSession;
+
+  @override
+  State<OperatorAccessScreen> createState() => _OperatorAccessScreenState();
+}
+
+class _OperatorAccessScreenState extends State<OperatorAccessScreen> {
+  final _loginNationalIdController = TextEditingController();
+  final _loginPinController = TextEditingController();
+  final _registerNameController = TextEditingController();
+  final _registerNationalIdController = TextEditingController();
+  final _registerPinController = TextEditingController();
+  final _registerPinConfirmationController = TextEditingController();
+  AuthenticatedOperator? _operator;
+  String _mode = 'login';
+  String _message = '';
+  MessageType _messageType = MessageType.info;
+  var _isLoading = true;
+  var _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshOperator();
+  }
+
+  @override
+  void dispose() {
+    _loginNationalIdController.dispose();
+    _loginPinController.dispose();
+    _registerNameController.dispose();
+    _registerNationalIdController.dispose();
+    _registerPinController.dispose();
+    _registerPinConfirmationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppShell(
+      bottomNavigationBar: const HomeNavigationBar(),
+      children: [
+        const EeHeader(
+          title: 'Usuario',
+          subtitle: 'Sesion segura para identificar cada registro.',
+        ),
+        const SizedBox(height: 14),
+        if (_isLoading)
+          const Center(child: CircularProgressIndicator())
+        else if (_operator != null)
+          _buildActiveSession()
+        else
+          _buildAccessForms(),
+        if (_message.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          MessageBox(type: _messageType, message: _message),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildActiveSession() {
+    final operator = _operator!;
+    return InfoPanel(
+      children: [
+        TwoColumnInfo(
+          leftLabel: 'Usuario activo',
+          leftValue: operator.displayName,
+          rightLabel: 'Rol',
+          rightValue: operator.role == 'admin' ? 'Administrador' : 'Usuario',
+        ),
+        const SizedBox(height: 14),
+        EeActionButton(
+          icon: Icons.logout,
+          label: _isSubmitting ? 'Cerrando sesion...' : 'Cerrar sesion',
+          isPrimary: false,
+          onPressed: _isSubmitting ? null : _signOut,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAccessForms() {
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(
+                value: 'login',
+                icon: Icon(Icons.login),
+                label: Text('Ingresar'),
+              ),
+              ButtonSegment(
+                value: 'register',
+                icon: Icon(Icons.person_add_alt_1),
+                label: Text('Registrarse'),
+              ),
+            ],
+            selected: {_mode},
+            onSelectionChanged: _isSubmitting
+                ? null
+                : (selection) {
+                    setState(() {
+                      _mode = selection.single;
+                      _message = '';
+                      _clearPinControllers();
+                    });
+                  },
+          ),
+        ),
+        const SizedBox(height: 14),
+        if (_mode == 'login') _buildLoginForm() else _buildRegistrationForm(),
+      ],
+    );
+  }
+
+  Widget _buildLoginForm() {
+    return InfoPanel(
+      children: [
+        TextField(
+          controller: _loginNationalIdController,
+          enabled: !_isSubmitting,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          maxLength: 10,
+          decoration: InputDecoration(
+            labelText: 'Cedula',
+            counterText: '',
+            helperText: useFirebaseEmulators
+                ? 'Modo de prueba: se acepta cualquier numero de 10 digitos.'
+                : null,
+          ),
+        ),
+        const SizedBox(height: 14),
+        _pinField(controller: _loginPinController, label: 'PIN'),
+        const SizedBox(height: 14),
+        EeActionButton(
+          icon: Icons.login,
+          label: _isSubmitting ? 'Verificando...' : 'Ingresar',
+          onPressed: _isSubmitting ? null : _signIn,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRegistrationForm() {
+    return InfoPanel(
+      children: [
+        TextField(
+          controller: _registerNameController,
+          enabled: !_isSubmitting,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(labelText: 'Nombre completo'),
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _registerNationalIdController,
+          enabled: !_isSubmitting,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          maxLength: 10,
+          decoration: InputDecoration(
+            labelText: 'Cedula',
+            counterText: '',
+            helperText: useFirebaseEmulators
+                ? 'Modo de prueba: se acepta cualquier numero de 10 digitos.'
+                : null,
+          ),
+        ),
+        const SizedBox(height: 14),
+        _pinField(
+          controller: _registerPinController,
+          label: 'PIN de 4 a 6 numeros',
+        ),
+        const SizedBox(height: 14),
+        _pinField(
+          controller: _registerPinConfirmationController,
+          label: 'Confirmar PIN',
+        ),
+        const SizedBox(height: 14),
+        EeActionButton(
+          icon: Icons.person_add_alt_1,
+          label: _isSubmitting ? 'Registrando...' : 'Crear usuario',
+          onPressed: _isSubmitting ? null : _register,
+        ),
+      ],
+    );
+  }
+
+  Widget _pinField({
+    required TextEditingController controller,
+    required String label,
+  }) {
+    return TextField(
+      controller: controller,
+      enabled: !_isSubmitting,
+      obscureText: true,
+      keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      maxLength: 6,
+      decoration: InputDecoration(labelText: label, counterText: ''),
+    );
+  }
+
+  Future<void> _refreshOperator() async {
+    try {
+      final operator = await widget.operatorSession.currentOperator();
+      if (!mounted) return;
+      setState(() {
+        _operator = operator;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _messageType = MessageType.error;
+        _message = 'No fue posible verificar la sesion actual.';
+      });
+    }
+  }
+
+  Future<void> _signIn() async {
+    final nationalId = _loginNationalIdController.text.trim();
+    final pin = _loginPinController.text;
+    if (nationalId.length != 10 || pin.length < 4) {
+      _setAuthMessage(
+        MessageType.error,
+        'Ingresa una cedula de 10 digitos y un PIN de 4 a 6 numeros.',
+      );
+      return;
+    }
+    await _runAuthAction(
+      () => widget.authService.signIn(nationalId: nationalId, pin: pin),
+      'Sesion iniciada.',
+    );
+  }
+
+  Future<void> _register() async {
+    final fullName = _registerNameController.text.trim();
+    final nationalId = _registerNationalIdController.text.trim();
+    final pin = _registerPinController.text;
+    if (fullName.length < 3 || nationalId.length != 10 || pin.length < 4) {
+      _setAuthMessage(
+        MessageType.error,
+        'Completa nombre, cedula de 10 digitos y PIN de 4 a 6 numeros.',
+      );
+      return;
+    }
+    if (pin != _registerPinConfirmationController.text) {
+      _setAuthMessage(MessageType.error, 'Los PIN no coinciden.');
+      return;
+    }
+    await _runAuthAction(
+      () => widget.authService.register(
+        fullName: fullName,
+        nationalId: nationalId,
+        pin: pin,
+      ),
+      'Usuario registrado y sesion iniciada.',
+    );
+  }
+
+  Future<void> _runAuthAction(
+    Future<void> Function() action,
+    String successMessage,
+  ) async {
+    setState(() {
+      _isSubmitting = true;
+      _message = '';
+    });
+    try {
+      await action();
+      _clearPinControllers();
+      final operator = await widget.operatorSession.currentOperator();
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _operator = operator;
+        _messageType = MessageType.success;
+        _message = successMessage;
+      });
+    } on OperatorAuthException catch (error) {
+      if (!mounted) return;
+      _clearPinControllers();
+      setState(() {
+        _isSubmitting = false;
+        _messageType = MessageType.error;
+        _message = error.message;
+      });
+    }
+  }
+
+  Future<void> _signOut() async {
+    setState(() => _isSubmitting = true);
+    await widget.authService.signOut();
+    if (!mounted) return;
+    _clearAllControllers();
+    setState(() {
+      _isSubmitting = false;
+      _operator = null;
+      _mode = 'login';
+      _messageType = MessageType.success;
+      _message = 'Sesion cerrada. Ya puedes ingresar con otro usuario.';
+    });
+  }
+
+  void _clearPinControllers() {
+    _loginPinController.clear();
+    _registerPinController.clear();
+    _registerPinConfirmationController.clear();
+  }
+
+  void _clearAllControllers() {
+    _loginNationalIdController.clear();
+    _registerNameController.clear();
+    _registerNationalIdController.clear();
+    _clearPinControllers();
+  }
+
+  void _setAuthMessage(MessageType type, String message) {
+    setState(() {
+      _messageType = type;
+      _message = message;
+    });
+  }
+}
+
 class TrapSizingScreen extends StatefulWidget {
-  const TrapSizingScreen({super.key});
+  const TrapSizingScreen({
+    this.reportStore = const DisabledTrapSizingReportStore(),
+    this.operatorSession = const DisabledOperatorSession(),
+    super.key,
+  });
+
+  final TrapSizingReportStore reportStore;
+  final OperatorSession operatorSession;
 
   @override
   State<TrapSizingScreen> createState() => _TrapSizingScreenState();
@@ -292,9 +924,24 @@ class TrapSizingScreen extends StatefulWidget {
 class _TrapSizingScreenState extends State<TrapSizingScreen> {
   final _rules = createTrapRules();
   final _values = <String, double>{};
+  final _equipmentController = TextEditingController();
+  final _notesController = TextEditingController();
   TrapRule? _selectedRule;
   TrapResult? _result;
+  TrapSizingReportDraft? _reportDraft;
+  String _sectionId = '';
+  String _cloudMessage = '';
+  MessageType _cloudMessageType = MessageType.info;
+  String? _savedReportId;
   var _estimateIndirectly = false;
+  var _isSaving = false;
+
+  @override
+  void dispose() {
+    _equipmentController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -302,8 +949,8 @@ class _TrapSizingScreenState extends State<TrapSizingScreen> {
     final fields = _activeFields();
 
     return AppShell(
+      bottomNavigationBar: const HomeNavigationBar(),
       children: [
-        const BackToHomeButton(),
         const EeHeader(
           title: 'Seleccion de trampa',
           subtitle: 'Dimensionamiento preliminar para trampas de condensado.',
@@ -346,6 +993,58 @@ class _TrapSizingScreenState extends State<TrapSizingScreen> {
             ],
           ),
         ],
+        if (selectedRule != null) ...[
+          const SizedBox(height: 14),
+          InfoPanel(
+            children: [
+              Text(
+                'Datos del equipo',
+                style: Theme.of(context).textTheme.titleMediumBold,
+              ),
+              const SizedBox(height: 12),
+              Text('Seccion', style: Theme.of(context).textTheme.smallLabel),
+              const SizedBox(height: 8),
+              EmbeddedWheelPicker<String>(
+                value: _sectionId,
+                options: [
+                  const PickerOption('', 'Selecciona una seccion'),
+                  ...plantSections.map(
+                    (section) => PickerOption(section.id, section.displayName),
+                  ),
+                ],
+                onSelected: (value) {
+                  setState(() {
+                    _sectionId = value;
+                    _invalidateCalculation();
+                  });
+                },
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _equipmentController,
+                enabled: !_isSaving,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Equipo',
+                  hintText: 'Nombre o identificacion del equipo',
+                ),
+                onChanged: (_) => setState(_invalidateCalculation),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _notesController,
+                enabled: !_isSaving,
+                minLines: 2,
+                maxLines: 4,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Observaciones (opcional)',
+                ),
+                onChanged: (_) => setState(_invalidateCalculation),
+              ),
+            ],
+          ),
+        ],
         if (selectedRule != null && selectedRule.requiresSizing) ...[
           const SizedBox(height: 14),
           InfoPanel(
@@ -370,7 +1069,7 @@ class _TrapSizingScreenState extends State<TrapSizingScreen> {
                   onChanged: (value) {
                     setState(() {
                       _values[field.key] = value;
-                      _result = null;
+                      _invalidateCalculation();
                     });
                   },
                 ),
@@ -384,9 +1083,51 @@ class _TrapSizingScreenState extends State<TrapSizingScreen> {
             ],
           ),
         ],
+        if (selectedRule != null && !selectedRule.requiresSizing) ...[
+          const SizedBox(height: 14),
+          EeActionButton(
+            icon: Icons.calculate_outlined,
+            label: 'Calcular',
+            onPressed: _calculate,
+          ),
+        ],
         if (_result != null) ...[
           const SizedBox(height: 14),
           TrapResultPanel(result: _result!),
+          const SizedBox(height: 14),
+          InfoPanel(
+            children: [
+              EeActionButton(
+                icon: _savedReportId == _reportDraft?.id
+                    ? Icons.cloud_done_outlined
+                    : Icons.cloud_upload_outlined,
+                label: _savedReportId == _reportDraft?.id
+                    ? 'Guardado en la nube'
+                    : (_isSaving
+                          ? 'Confirmando guardado...'
+                          : 'Guardar en la nube'),
+                onPressed:
+                    _isSaving ||
+                        _reportDraft == null ||
+                        _savedReportId == _reportDraft?.id
+                    ? null
+                    : _saveReport,
+              ),
+              const SizedBox(height: 10),
+              EeActionButton(
+                icon: Icons.calculate_outlined,
+                label: 'Solo calcular / No guardar',
+                isPrimary: false,
+                onPressed: _isSaving || _reportDraft == null
+                    ? null
+                    : _keepWithoutSaving,
+              ),
+            ],
+          ),
+        ],
+        if (_cloudMessage.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          MessageBox(type: _cloudMessageType, message: _cloudMessage),
         ],
       ],
     );
@@ -396,7 +1137,7 @@ class _TrapSizingScreenState extends State<TrapSizingScreen> {
     setState(() {
       _selectedRule = rule;
       _estimateIndirectly = false;
-      _result = null;
+      _invalidateCalculation();
       _values.clear();
       if (rule != null && rule.requiresSizing) {
         _seedFields([directCondensateField()]);
@@ -409,7 +1150,7 @@ class _TrapSizingScreenState extends State<TrapSizingScreen> {
     if (rule == null) return;
     setState(() {
       _estimateIndirectly = value;
-      _result = null;
+      _invalidateCalculation();
       _values.clear();
       _seedFields(value ? rule.fields : [directCondensateField()]);
     });
@@ -429,85 +1170,296 @@ class _TrapSizingScreenState extends State<TrapSizingScreen> {
     }
   }
 
+  void _invalidateCalculation() {
+    _result = null;
+    _reportDraft = null;
+    _savedReportId = null;
+    _cloudMessage = '';
+  }
+
   void _calculate() {
     final rule = _selectedRule;
     if (rule == null) return;
 
-    if (!rule.requiresSizing) {
-      setState(() {
-        _result = TrapResult(
-          title: 'Resumen de trampa requerida',
-          rows: [('Uso', rule.name), ('Tipo recomendado', rule.trapType)],
-          explanation: rule.calculate(_values).explanation,
-        );
-      });
+    final section = plantSectionById(_sectionId);
+    if (section == null) {
+      _showCalculationError('Selecciona la seccion del equipo.');
+      return;
+    }
+
+    final equipmentName = _equipmentController.text.trim();
+    if (equipmentName.isEmpty) {
+      _showCalculationError('Ingresa el nombre o identificacion del equipo.');
       return;
     }
 
     late TrapCalculation calculation;
-    if (_estimateIndirectly) {
+    late String calculationMethod;
+    late List<FieldSpec> inputFields;
+    if (!rule.requiresSizing) {
       calculation = rule.calculate(_values);
+      calculationMethod = 'direct_selection';
+      inputFields = const [];
+    } else if (_estimateIndirectly) {
+      calculation = rule.calculate(_values);
+      calculationMethod = 'indirect';
+      inputFields = rule.fields;
     } else {
       final directCondensateLMin = _values['directCondensate'] ?? 0;
       if (directCondensateLMin <= 0) {
-        setState(() {
-          _result = const TrapResult(
-            title: 'Falta el caudal',
-            rows: [],
-            explanation:
-                'Ingresa el caudal de condensado a desalojar o marca "No conozco la cantidad de condensado".',
-            isError: true,
-          );
-        });
+        _showCalculationError(
+          'Ingresa el caudal de condensado a desalojar o marca '
+          '"No conozco la cantidad de condensado".',
+        );
         return;
       }
-      final directCondensateKgH =
-          directCondensateLMin * TrapConstants.condensateDensityKgL * 60;
-      calculation = TrapCalculation(
-        condensateKgH: directCondensateKgH,
-        explanation:
-            'Medicion directa de ${Formats.one(directCondensateLMin)} L/min, convertida con densidad aproximada de condensado de 1.0 kg/L.',
-      );
+      calculation = calculateDirectCondensate(directCondensateLMin);
+      calculationMethod = 'direct';
+      inputFields = [directCondensateField()];
     }
 
     final recommendedCapacity = calculation.condensateKgH * rule.safetyFactor;
+    final recommendedDiameter = rule.requiresSizing
+        ? recommendTrapConnectionDiameter(recommendedCapacity)
+        : 'No aplica: seleccion directa';
     final pressure = math.max(0.0, _values['steamPressure'] ?? 0);
     final rows = <(String, String)>[
       ('Uso', rule.name),
       ('Tipo recomendado', rule.trapType),
-      (
-        'Carga estimada',
-        '${Formats.noDecimal(calculation.condensateKgH)} kg/h',
-      ),
-      (
-        'Equivalente aproximado',
-        '${Formats.noDecimal(calculation.condensateKgH)} L/h',
-      ),
-      ('Factor de seguridad', Formats.one(rule.safetyFactor)),
-      (
-        'Capacidad minima sugerida',
-        '${Formats.noDecimal(recommendedCapacity)} kg/h',
-      ),
-      (
-        'Diametro preliminar sugerido',
-        recommendTrapConnectionDiameter(recommendedCapacity),
-      ),
     ];
-    if (pressure > 0) {
+    if (rule.requiresSizing) {
+      rows.addAll([
+        (
+          'Carga estimada',
+          '${Formats.noDecimal(calculation.condensateKgH)} kg/h',
+        ),
+        (
+          'Equivalente aproximado',
+          '${Formats.noDecimal(calculation.condensateKgH)} L/h',
+        ),
+        ('Factor de seguridad', Formats.one(rule.safetyFactor)),
+        (
+          'Capacidad minima sugerida',
+          '${Formats.noDecimal(recommendedCapacity)} kg/h',
+        ),
+        ('Diametro preliminar sugerido', recommendedDiameter),
+      ]);
+    }
+    if (rule.requiresSizing && pressure > 0) {
       rows.add((
         'Presion de vapor considerada',
         '${Formats.one(pressure)} bar(g)',
       ));
     }
 
+    final explanation = rule.requiresSizing
+        ? '${calculation.explanation}\n\nResultado preliminar para seleccion inicial. Para compra se debe validar contra presion diferencial, contrapresion, orificio interno, material, conexiones y tabla del fabricante.'
+        : calculation.explanation;
+    final inputs = <String, TrapReportInput>{
+      for (final field in inputFields)
+        field.key: TrapReportInput(
+          value: _values[field.key] ?? field.defaultValue,
+          unit: field.unit,
+          labelSnapshot: field.label,
+        ),
+    };
+    final reportResult = TrapSizingReportResult(
+      condensateLoadKgH: calculation.condensateKgH,
+      condensateEquivalentLH: calculation.condensateKgH,
+      requiredCapacityKgH: recommendedCapacity,
+      recommendedTrapType: rule.trapType,
+      recommendedConnectionDiameter: recommendedDiameter,
+      explanation: explanation,
+    );
+
     setState(() {
       _result = TrapResult(
         title: 'Resumen de trampa requerida',
         rows: rows,
-        explanation:
-            '${calculation.explanation}\n\nResultado preliminar para seleccion inicial. Para compra se debe validar contra presion diferencial, contrapresion, orificio interno, material, conexiones y tabla del fabricante.',
+        explanation: explanation,
       );
+      _reportDraft = TrapSizingReportDraft(
+        id: _createTrapReportId(),
+        sectionId: section.id,
+        sectionNameSnapshot: section.displayName,
+        equipmentName: equipmentName,
+        equipmentNameNormalized: normalizeEquipmentName(equipmentName),
+        notes: _notesController.text.trim(),
+        applicationTypeId: rule.id,
+        applicationTypeNameSnapshot: rule.name,
+        calculationMethod: calculationMethod,
+        inputs: inputs,
+        result: reportResult,
+        safetyFactor: rule.safetyFactor,
+        assumptions: TrapSizingReportDraft.currentAssumptions(),
+      );
+      _savedReportId = null;
+      _cloudMessage = '';
     });
+  }
+
+  void _showCalculationError(String message) {
+    setState(() {
+      _reportDraft = null;
+      _savedReportId = null;
+      _result = TrapResult(
+        title: 'Faltan datos',
+        rows: const [],
+        explanation: message,
+        isError: true,
+      );
+      _cloudMessage = '';
+    });
+  }
+
+  Future<void> _saveReport() async {
+    final draft = _reportDraft;
+    if (draft == null || _isSaving) {
+      return;
+    }
+
+    AuthenticatedOperator? operator;
+    try {
+      operator = await widget.operatorSession.currentOperator();
+    } catch (_) {
+      if (!mounted) return;
+      _setCloudMessage(
+        MessageType.error,
+        'No fue posible verificar la sesion del usuario.',
+      );
+      return;
+    }
+    if (!mounted) return;
+    if (operator == null) {
+      _setCloudMessage(
+        MessageType.warning,
+        'Inicia sesion como usuario antes de guardar en la nube.',
+      );
+      return;
+    }
+
+    final confirmed = await _confirmCloudSave(draft, operator);
+    if (!mounted || confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+      _cloudMessageType = MessageType.info;
+      _cloudMessage = 'Guardando y esperando confirmacion de la nube...';
+    });
+
+    try {
+      final receipt = await widget.reportStore.saveReport(draft);
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _savedReportId = receipt.id;
+        _cloudMessageType = MessageType.success;
+        _cloudMessage = 'Reporte confirmado en la nube.';
+      });
+    } on TrapSizingStoreException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _cloudMessageType = MessageType.error;
+        _cloudMessage = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _cloudMessageType = MessageType.error;
+        _cloudMessage = 'No se pudo confirmar el reporte en la nube.';
+      });
+    }
+  }
+
+  Future<bool?> _confirmCloudSave(
+    TrapSizingReportDraft draft,
+    AuthenticatedOperator operator,
+  ) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Confirmar guardado'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _summaryText('Seccion', draft.sectionNameSnapshot),
+                _summaryText('Equipo', draft.equipmentName),
+                _summaryText(
+                  'Metodo',
+                  _calculationMethodLabel(draft.calculationMethod),
+                ),
+                for (final input in draft.inputs.values)
+                  _summaryText(
+                    input.labelSnapshot,
+                    '${Formats.one(input.value)} ${input.unit}',
+                  ),
+                _summaryText(
+                  'Carga de condensado',
+                  '${Formats.noDecimal(draft.result.condensateLoadKgH)} kg/h',
+                ),
+                _summaryText('Trampa', draft.result.recommendedTrapType),
+                _summaryText('Usuario', operator.displayName),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Corregir'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).pop(true),
+              icon: const Icon(Icons.cloud_upload_outlined),
+              label: const Text('Confirmar y guardar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _summaryText(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text('$label: $value'),
+    );
+  }
+
+  String _calculationMethodLabel(String method) {
+    return switch (method) {
+      'direct' => 'Condensado conocido',
+      'indirect' => 'Calculo indirecto',
+      _ => 'Seleccion directa',
+    };
+  }
+
+  void _keepWithoutSaving() {
+    setState(() {
+      _reportDraft = null;
+      _savedReportId = null;
+      _cloudMessageType = MessageType.info;
+      _cloudMessage =
+          'El resultado se mantuvo solo como calculo y no se guardo.';
+    });
+  }
+
+  void _setCloudMessage(MessageType type, String message) {
+    setState(() {
+      _cloudMessageType = type;
+      _cloudMessage = message;
+    });
+  }
+
+  String _createTrapReportId() {
+    final random = math.Random().nextInt(1 << 32).toRadixString(16);
+    return 'trap-${DateTime.now().microsecondsSinceEpoch}-$random';
   }
 }
 
@@ -515,11 +1467,13 @@ class BarePipeReportScreen extends StatefulWidget {
   const BarePipeReportScreen({
     required this.reportStore,
     required this.cloudinaryService,
+    required this.operatorSession,
     super.key,
   });
 
   final ReportStore reportStore;
   final CloudinaryService cloudinaryService;
+  final OperatorSession operatorSession;
 
   @override
   State<BarePipeReportScreen> createState() => _BarePipeReportScreenState();
@@ -528,10 +1482,15 @@ class BarePipeReportScreen extends StatefulWidget {
 class _BarePipeReportScreenState extends State<BarePipeReportScreen> {
   final _picker = ImagePicker();
   final _lengthController = TextEditingController();
+  final _equipmentController = TextEditingController();
+  final _notesController = TextEditingController();
   Uint8List? _photoBytes;
-  String _section = '';
+  String _sectionId = '';
   String _diameter = '';
   String _pressure = '';
+  BarePipeCalculation? _calculation;
+  CloudinaryUpload? _uploadedEvidence;
+  String? _reportId;
   String _message = '';
   MessageType _messageType = MessageType.info;
   var _isSubmitting = false;
@@ -539,14 +1498,16 @@ class _BarePipeReportScreenState extends State<BarePipeReportScreen> {
   @override
   void dispose() {
     _lengthController.dispose();
+    _equipmentController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AppShell(
+      bottomNavigationBar: const HomeNavigationBar(),
       children: [
-        const BackToHomeButton(),
         const EeHeader(
           title: 'Reporte de tuberia desnuda',
           subtitle: 'Evidencia de vapor o condensado sin aislamiento.',
@@ -574,14 +1535,30 @@ class _BarePipeReportScreenState extends State<BarePipeReportScreen> {
         ),
         const SizedBox(height: 8),
         EmbeddedWheelPicker<String>(
-          value: _section,
+          value: _sectionId,
           options: [
-            const PickerOption('', 'Sin dato'),
-            ...barePipeSections.map(
-              (section) => PickerOption(section, section),
+            const PickerOption('', 'Selecciona una seccion'),
+            ...plantSections.map(
+              (section) => PickerOption(section.id, section.displayName),
             ),
           ],
-          onSelected: (value) => setState(() => _section = value),
+          onSelected: (value) {
+            setState(() {
+              _sectionId = value;
+              _invalidateBareCalculation();
+            });
+          },
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _equipmentController,
+          enabled: !_isSubmitting,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Equipo o ubicacion',
+            hintText: 'Ej. Cabezal de vapor del area',
+          ),
+          onChanged: (_) => setState(_invalidateBareCalculation),
         ),
         const SizedBox(height: 14),
         Text(
@@ -597,7 +1574,12 @@ class _BarePipeReportScreenState extends State<BarePipeReportScreen> {
               (diameter) => PickerOption(diameter.label, diameter.label),
             ),
           ],
-          onSelected: (value) => setState(() => _diameter = value),
+          onSelected: (value) {
+            setState(() {
+              _diameter = value;
+              _invalidateBareCalculation();
+            });
+          },
         ),
         const SizedBox(height: 14),
         Text(
@@ -616,7 +1598,12 @@ class _BarePipeReportScreenState extends State<BarePipeReportScreen> {
               ),
             ),
           ],
-          onSelected: (value) => setState(() => _pressure = value),
+          onSelected: (value) {
+            setState(() {
+              _pressure = value;
+              _invalidateBareCalculation();
+            });
+          },
         ),
         const SizedBox(height: 14),
         Text(
@@ -631,13 +1618,68 @@ class _BarePipeReportScreenState extends State<BarePipeReportScreen> {
             FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
           ],
           decoration: const InputDecoration(hintText: '0.0', suffixText: 'm'),
+          onChanged: (_) => setState(_invalidateBareCalculation),
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _notesController,
+          enabled: !_isSubmitting,
+          minLines: 2,
+          maxLines: 4,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Observaciones (opcional)',
+          ),
+          onChanged: (_) => setState(_invalidateBareCalculation),
         ),
         const SizedBox(height: 16),
         EeActionButton(
-          icon: Icons.cloud_upload_outlined,
-          label: _isSubmitting ? 'Ingresando reporte...' : 'Ingresar reporte',
-          onPressed: _isSubmitting ? null : _submitReport,
+          icon: Icons.calculate_outlined,
+          label: 'Calcular y revisar',
+          onPressed: _isSubmitting ? null : _calculateBarePipeReport,
         ),
+        if (_calculation != null) ...[
+          const SizedBox(height: 14),
+          InfoPanel(
+            children: [
+              Text(
+                'Resumen del reporte',
+                style: Theme.of(context).textTheme.titleMediumBold,
+              ),
+              const SizedBox(height: 12),
+              TwoColumnInfo(
+                leftLabel: 'Perdida termica',
+                leftValue:
+                    '${Formats.two(_calculation!.heatLossKw)} kW termicos',
+                rightLabel: 'Perdida lineal',
+                rightValue: '${Formats.two(_calculation!.heatLossWPerM)} W/m',
+              ),
+              const SizedBox(height: 12),
+              LabelValue(
+                label: 'Equipo o ubicacion',
+                value: _equipmentController.text.trim(),
+              ),
+              const SizedBox(height: 12),
+              LabelValue(
+                label: 'Datos principales',
+                value:
+                    '$_diameter - $_pressure bar(g) - ${_lengthController.text.trim()} m',
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          EeActionButton(
+            icon: _uploadedEvidence == null
+                ? Icons.cloud_upload_outlined
+                : Icons.sync_outlined,
+            label: _isSubmitting
+                ? 'Guardando reporte...'
+                : (_uploadedEvidence == null
+                      ? 'Guardar reporte'
+                      : 'Reintentar guardado'),
+            onPressed: _isSubmitting ? null : _saveBarePipeReport,
+          ),
+        ],
         if (_message.isNotEmpty) ...[
           const SizedBox(height: 12),
           MessageBox(type: _messageType, message: _message),
@@ -670,87 +1712,165 @@ class _BarePipeReportScreenState extends State<BarePipeReportScreen> {
     if (!mounted) return;
     setState(() {
       _photoBytes = bytes;
-      _message = '';
+      _invalidateBareCalculation();
     });
   }
 
-  Future<void> _submitReport() async {
+  void _calculateBarePipeReport() {
     final photoBytes = _photoBytes;
     if (photoBytes == null) {
       _setMessage(
         MessageType.error,
-        'Captura una foto antes de ingresar el reporte.',
+        'Captura una foto para revisar el reporte completo.',
       );
+      return;
+    }
+
+    final section = plantSectionById(_sectionId);
+    if (section == null) {
+      _setMessage(MessageType.error, 'Selecciona la seccion.');
+      return;
+    }
+    if (_equipmentController.text.trim().isEmpty) {
+      _setMessage(
+        MessageType.error,
+        'Ingresa el equipo o ubicacion de la tuberia.',
+      );
+      return;
+    }
+    if (_diameter.isEmpty) {
+      _setMessage(MessageType.error, 'Selecciona el diametro de la tuberia.');
+      return;
+    }
+    if (_pressure.isEmpty) {
+      _setMessage(MessageType.error, 'Selecciona la presion estimada.');
       return;
     }
 
     final lengthText = _lengthController.text.trim();
     final lengthMeters = _parseOptionalNumber(lengthText);
-    if (lengthText.isNotEmpty && (lengthMeters == null || lengthMeters <= 0)) {
+    if (lengthMeters == null || lengthMeters <= 0) {
+      _setMessage(MessageType.error, 'La longitud debe ser mayor a cero.');
+      return;
+    }
+
+    final pressureBarG = double.tryParse(_pressure);
+    final calculation = BarePipeCalculator.calculate(
+      diameterLabel: _diameter,
+      pressureBarG: pressureBarG,
+      lengthMeters: lengthMeters,
+    );
+    if (!calculation.isCalculated) {
       _setMessage(
         MessageType.error,
-        'La longitud debe quedar en blanco o ser mayor a cero.',
+        'No fue posible calcular la perdida termica con estos datos.',
       );
       return;
     }
 
-    final pressureBarG = _pressure.isEmpty ? null : double.tryParse(_pressure);
-    final reportId = _createReportId();
+    setState(() {
+      _calculation = calculation;
+      _uploadedEvidence = null;
+      _reportId = _createReportId();
+      _messageType = MessageType.success;
+      _message =
+          'Calculo listo. Revisa el resumen y confirma antes de guardar.';
+    });
+  }
+
+  Future<void> _saveBarePipeReport() async {
+    final photoBytes = _photoBytes;
+    final calculation = _calculation;
+    final reportId = _reportId;
+    final section = plantSectionById(_sectionId);
+    final lengthMeters = _parseOptionalNumber(_lengthController.text);
+    final pressureBarG = double.tryParse(_pressure);
+    if (photoBytes == null ||
+        calculation == null ||
+        reportId == null ||
+        section == null ||
+        lengthMeters == null ||
+        pressureBarG == null ||
+        _isSubmitting) {
+      _setMessage(
+        MessageType.error,
+        'Calcula y revisa el reporte antes de guardarlo.',
+      );
+      return;
+    }
+
+    final operator = await widget.operatorSession.currentOperator();
+    if (!mounted) return;
+    if (operator == null) {
+      _setMessage(
+        MessageType.warning,
+        'Inicia sesion como usuario antes de guardar en la nube.',
+      );
+      return;
+    }
+
+    final confirmed = await _confirmBarePipeSave(
+      section: section,
+      calculation: calculation,
+      operator: operator,
+    );
+    if (!mounted || confirmed != true) {
+      return;
+    }
+
     setState(() {
       _isSubmitting = true;
       _messageType = MessageType.info;
-      _message = 'Subiendo evidencia...';
+      _message = _uploadedEvidence == null
+          ? 'Subiendo evidencia a Cloudinary...'
+          : 'Reintentando confirmacion del reporte...';
     });
 
     try {
-      final upload = await widget.cloudinaryService.uploadEvidence(
-        bytes: photoBytes,
-        reportId: reportId,
-      );
-      final calculation = BarePipeCalculator.calculate(
-        diameterLabel: _diameter,
-        pressureBarG: pressureBarG,
-        lengthMeters: lengthMeters,
-      );
+      final upload =
+          _uploadedEvidence ??
+          await widget.cloudinaryService.uploadEvidence(
+            bytes: photoBytes,
+            reportId: reportId,
+          );
+      if (!mounted) return;
+      setState(() {
+        _uploadedEvidence = upload;
+        _message = 'Evidencia subida. Confirmando documento en la nube...';
+      });
       final report = BarePipeReport(
         id: reportId,
         createdAt: DateTime.now(),
-        section: _section,
+        section: section.displayName,
         diameterLabel: _diameter,
         pressureBarG: pressureBarG,
         lengthMeters: lengthMeters,
         photoUrl: upload.secureUrl,
         photoPublicId: upload.publicId,
         calculation: calculation,
+        sectionId: section.id,
+        sectionNameSnapshot: section.displayName,
+        equipmentName: _equipmentController.text.trim(),
+        equipmentNameNormalized: normalizeEquipmentName(
+          _equipmentController.text,
+        ),
+        notes: _notesController.text.trim(),
+        photoProvider: 'cloudinary',
+        status: 'synced',
       );
-      if (!mounted) return;
-      setState(() {
-        _message = 'Evidencia subida. Guardando reporte...';
-      });
       await widget.reportStore.saveReport(report);
 
       if (!mounted) return;
       setState(() {
-        _isSubmitting = false;
-        _photoBytes = null;
-        _section = '';
-        _diameter = '';
-        _pressure = '';
-        _lengthController.clear();
+        _resetBarePipeForm();
         _messageType = MessageType.success;
-        _message = calculation.isCalculated
-            ? 'Reporte ingresado: ${Formats.two(calculation.heatLossKw)} kW y ${Formats.usd(calculation.monthlyUsd)}/mes estimados.'
-            : 'Reporte ingresado. Quedo pendiente el calculo porque falta diametro, presion o longitud.';
+        _message =
+            'Reporte confirmado: ${Formats.two(calculation.heatLossKw)} kW termicos.';
       });
     } on ReportSyncException catch (error) {
       if (!mounted) return;
       setState(() {
         _isSubmitting = false;
-        _photoBytes = null;
-        _section = '';
-        _diameter = '';
-        _pressure = '';
-        _lengthController.clear();
         _messageType = MessageType.warning;
         _message = error.message;
       });
@@ -762,6 +1882,82 @@ class _BarePipeReportScreenState extends State<BarePipeReportScreen> {
         _message = error.toString().replaceFirst('Exception: ', '').trim();
       });
     }
+  }
+
+  Future<bool?> _confirmBarePipeSave({
+    required PlantSection section,
+    required BarePipeCalculation calculation,
+    required AuthenticatedOperator operator,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Confirmar reporte'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_photoBytes != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.memory(
+                      _photoBytes!,
+                      height: 150,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                Text('Seccion: ${section.displayName}'),
+                Text('Equipo: ${_equipmentController.text.trim()}'),
+                Text(
+                  'Tuberia: $_diameter - $_pressure bar(g) - '
+                  '${_lengthController.text.trim()} m',
+                ),
+                Text(
+                  'Perdida: ${Formats.two(calculation.heatLossKw)} kW termicos',
+                ),
+                Text('Usuario: ${operator.displayName}'),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Corregir'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).pop(true),
+              icon: const Icon(Icons.cloud_upload_outlined),
+              label: const Text('Confirmar y guardar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _invalidateBareCalculation() {
+    _calculation = null;
+    _uploadedEvidence = null;
+    _reportId = null;
+    _message = '';
+  }
+
+  void _resetBarePipeForm() {
+    _isSubmitting = false;
+    _photoBytes = null;
+    _sectionId = '';
+    _diameter = '';
+    _pressure = '';
+    _calculation = null;
+    _uploadedEvidence = null;
+    _reportId = null;
+    _lengthController.clear();
+    _equipmentController.clear();
+    _notesController.clear();
   }
 
   void _setMessage(MessageType type, String message) {
@@ -785,187 +1981,573 @@ class _BarePipeReportScreenState extends State<BarePipeReportScreen> {
   }
 }
 
+enum ConsumptionEntryTab { consumption, pressure }
+
 class ConsumptionEntryScreen extends StatefulWidget {
-  const ConsumptionEntryScreen({required this.consumptionStore, super.key});
+  const ConsumptionEntryScreen({
+    required this.consumptionStore,
+    required this.pressureReadingStore,
+    required this.operatorSession,
+    super.key,
+  });
 
   final ConsumptionStore consumptionStore;
+  final PressureReadingStore pressureReadingStore;
+  final OperatorSession operatorSession;
 
   @override
   State<ConsumptionEntryScreen> createState() => _ConsumptionEntryScreenState();
 }
 
 class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
-  final _fuelController = TextEditingController();
-  final _waterController = TextEditingController();
-  final _steamController = TextEditingController();
-  final _pinController = TextEditingController();
+  static const _psiPerBar = 14.5037738;
+
+  final _notesController = TextEditingController();
   String _boilerName = boilerNames.first;
+  double _boilerPressurePsi = 10.4 * _psiPerBar;
+  int _fuelInputValue = 0;
+  int _waterInputValue = 0;
+  int _steamInputValue = 0;
+  Map<String, BoilerReading> _latestReadingByBoiler = {};
+  bool _isLoadingPreviousReadings = true;
+  bool _pressureInBar = false;
+  ConsumptionEntryTab _selectedTab = ConsumptionEntryTab.consumption;
   String _message = '';
   MessageType _messageType = MessageType.info;
   var _isSubmitting = false;
 
   @override
+  void initState() {
+    super.initState();
+    unawaited(_synchronizePendingOnOpen());
+  }
+
+  Future<void> _synchronizePendingOnOpen() async {
+    try {
+      final readings = await widget.consumptionStore.loadReadings();
+      if (!mounted) return;
+      final sorted = [...readings]
+        ..sort((left, right) {
+          final byDate = right.recordedAt.compareTo(left.recordedAt);
+          return byDate != 0 ? byDate : right.revision.compareTo(left.revision);
+        });
+      final latest = <String, BoilerReading>{};
+      for (final reading in sorted) {
+        final name =
+            boilerById(reading.effectiveBoilerId)?.displayName ??
+            reading.boilerName;
+        latest.putIfAbsent(name, () => reading);
+      }
+      final pendingCount = readings
+          .where((reading) => reading.status == 'pending_sync')
+          .length;
+      setState(() {
+        _latestReadingByBoiler = latest;
+        _isLoadingPreviousReadings = false;
+        _applyPreviousReading(latest[_boilerName]);
+      });
+      if (pendingCount > 0) {
+        _setMessage(
+          MessageType.warning,
+          pendingCount == 1
+              ? 'Hay una lectura pendiente de sincronizacion. Se reintentara automaticamente.'
+              : 'Hay $pendingCount lecturas pendientes de sincronizacion. Se reintentaran automaticamente.',
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingPreviousReadings = false);
+    }
+  }
+
+  @override
   void dispose() {
-    _fuelController.dispose();
-    _waterController.dispose();
-    _steamController.dispose();
-    _pinController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final readsSteam = _boilerName == alfaLavalBoiler;
+    final boiler = boilerByName(_boilerName)!;
+    final readsSteam = boiler.readsSteam;
     return AppShell(
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedTab == ConsumptionEntryTab.consumption ? 0 : 2,
+        onDestinationSelected: (index) {
+          FocusScope.of(context).unfocus();
+          if (index == 1) {
+            returnToHome(context);
+            return;
+          }
+          setState(() {
+            _selectedTab = index == 0
+                ? ConsumptionEntryTab.consumption
+                : ConsumptionEntryTab.pressure;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.local_fire_department_outlined),
+            selectedIcon: Icon(Icons.local_fire_department),
+            label: 'Consumos',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Casa',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.speed_outlined),
+            selectedIcon: Icon(Icons.speed),
+            label: 'Presiones',
+          ),
+        ],
+      ),
       children: [
-        const BackToHomeButton(),
-        const EeHeader(
+        EeHeader(
           title: 'Ingresar consumos',
-          subtitle: 'Registro horario de agua, combustible y vapor.',
+          subtitle: _selectedTab == ConsumptionEntryTab.consumption
+              ? 'Registro horario de lecturas acumuladas.'
+              : 'Registro de presiones de distribuidores de vapor.',
         ),
         const SizedBox(height: 14),
-        InfoPanel(
-          children: [
-            Text(
-              'Seleccione la caldera',
-              style: Theme.of(context).textTheme.labelBold,
-            ),
-            const SizedBox(height: 8),
-            EmbeddedWheelPicker<String>(
-              value: _boilerName,
-              options: boilerNames
-                  .map((name) => PickerOption(name, name))
-                  .toList(),
-              onSelected: _selectBoiler,
-            ),
-            const SizedBox(height: 16),
-            _buildNumberField(
-              controller: _fuelController,
-              label: 'Lectura total flujometro combustible',
-              suffix: 'unid.',
-            ),
-            const SizedBox(height: 14),
-            _buildNumberField(
-              controller: _waterController,
-              label: 'Lectura total flujometro agua',
-              suffix: 'unid.',
-            ),
-            const SizedBox(height: 14),
-            _buildNumberField(
-              controller: _steamController,
-              label: 'Lectura total vapor',
-              suffix: 'unid.',
-              enabled: readsSteam && !_isSubmitting,
-              hintText: readsSteam ? '0.0' : 'Solo Alfa Laval 1200',
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _pinController,
-              enabled: !_isSubmitting,
-              obscureText: true,
-              maxLength: 4,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(
-                labelText: 'PIN calderista',
-                hintText: '0000',
-                counterText: '',
+        Visibility(
+          visible: _selectedTab == ConsumptionEntryTab.consumption,
+          maintainState: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              InfoPanel(
+                children: [
+                  if (_isLoadingPreviousReadings) ...[
+                    const LinearProgressIndicator(minHeight: 3),
+                    const SizedBox(height: 12),
+                  ],
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Seleccione la caldera',
+                              style: Theme.of(context).textTheme.labelBold,
+                            ),
+                            const SizedBox(height: 8),
+                            EmbeddedWheelPicker<String>(
+                              value: _boilerName,
+                              options: boilerNames
+                                  .map((name) => PickerOption(name, name))
+                                  .toList(),
+                              onSelected: _selectBoiler,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Presion',
+                              style: Theme.of(context).textTheme.labelBold,
+                            ),
+                            const SizedBox(height: 8),
+                            EmbeddedWheelPicker<double>(
+                              value: _selectedPressureValue,
+                              options: _pressureOptions,
+                              onSelected: _selectPressure,
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _pressureUnitButton(
+                                    label: 'PSI',
+                                    selected: !_pressureInBar,
+                                    onPressed: () => _setPressureUnit(false),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: _pressureUnitButton(
+                                    label: 'bar',
+                                    selected: _pressureInBar,
+                                    onPressed: () => _setPressureUnit(true),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Tipo de dato ingresado',
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, color: brandRed, size: 20),
+                        SizedBox(width: 10),
+                        Text('Lectura acumulada'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildConsumptionOdometer(
+                    label: _isAlfaLaval
+                        ? 'Lectura acumulada de bunker'
+                        : 'Lectura acumulada de bunker',
+                    helper: _isAlfaLaval
+                        ? 'El medidor se lee directamente en litros.'
+                        : 'Lectura acumulada del medidor en galones.',
+                    value: _fuelInputValue,
+                    unit: _isAlfaLaval ? 'L' : 'gal',
+                    keyPrefix: 'consumption-bunker',
+                    onChanged: (value) =>
+                        setState(() => _fuelInputValue = value),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildConsumptionOdometer(
+                    label: 'Lectura acumulada de agua',
+                    helper: _isAlfaLaval
+                        ? 'Cada unidad del contador equivale a 10 litros.'
+                        : 'Lectura acumulada del medidor en galones.',
+                    value: _waterInputValue,
+                    unit: _isAlfaLaval ? 'x10 L' : 'gal',
+                    keyPrefix: 'consumption-water',
+                    onChanged: (value) =>
+                        setState(() => _waterInputValue = value),
+                  ),
+                  if (readsSteam) ...[
+                    const SizedBox(height: 14),
+                    _buildConsumptionOdometer(
+                      label: 'Lectura acumulada de vapor',
+                      helper: 'Lectura acumulada del medidor en galones.',
+                      value: _steamInputValue,
+                      unit: 'gal',
+                      keyPrefix: 'consumption-steam',
+                      onChanged: (value) =>
+                          setState(() => _steamInputValue = value),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _notesController,
+                    enabled: !_isSubmitting,
+                    minLines: 2,
+                    maxLines: 4,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      labelText: 'Observaciones (opcional)',
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              EeActionButton(
+                icon: Icons.fact_check_outlined,
+                label: _isSubmitting
+                    ? 'Guardando lectura...'
+                    : 'Revisar lectura',
+                onPressed: _isSubmitting ? null : _reviewAndSaveReading,
+              ),
+              if (_message.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                MessageBox(type: _messageType, message: _message),
+              ],
+            ],
+          ),
         ),
-        const SizedBox(height: 16),
-        EeActionButton(
-          icon: Icons.save_outlined,
-          label: _isSubmitting ? 'Guardando lectura...' : 'Ingresar consumo',
-          onPressed: _isSubmitting ? null : _submitReading,
+        Visibility(
+          visible: _selectedTab == ConsumptionEntryTab.pressure,
+          maintainState: true,
+          child: PressureEntryTab(
+            store: widget.pressureReadingStore,
+            operatorSession: widget.operatorSession,
+          ),
         ),
-        if (_message.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          MessageBox(type: _messageType, message: _message),
-        ],
       ],
     );
   }
 
-  Widget _buildNumberField({
-    required TextEditingController controller,
+  Widget _buildConsumptionOdometer({
     required String label,
-    required String suffix,
-    bool enabled = true,
-    String hintText = '0.0',
+    required String helper,
+    required int value,
+    required String unit,
+    required String keyPrefix,
+    required ValueChanged<int> onChanged,
   }) {
-    return TextField(
-      controller: controller,
-      enabled: enabled && !_isSubmitting,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]'))],
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hintText,
-        suffixText: suffix,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.labelBold),
+        const SizedBox(height: 3),
+        Text(
+          helper,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: mutedColor),
+        ),
+        const SizedBox(height: 8),
+        IgnorePointer(
+          ignoring: _isSubmitting,
+          child: IndustrialOdometer(
+            value: value,
+            unitLabel: unit,
+            digitKeyPrefix: keyPrefix,
+            valueKey: ValueKey('$keyPrefix-value'),
+            onChanged: onChanged,
+          ),
+        ),
+      ],
     );
   }
 
   void _selectBoiler(String value) {
     setState(() {
       _boilerName = value;
-      if (_boilerName != alfaLavalBoiler) {
-        _steamController.clear();
-      }
+      _boilerPressurePsi = _defaultPressurePsi(value);
+      _applyPreviousReading(_latestReadingByBoiler[value]);
     });
   }
 
-  Future<void> _submitReading() async {
-    final fuelTotal = _parseRequiredNumber(_fuelController.text, 'combustible');
-    if (fuelTotal == null) {
+  bool get _isAlfaLaval => _boilerName == alfaLavalBoiler;
+
+  double _defaultPressurePsi(String boilerName) {
+    final pressureBar = boilerName == alfaLavalBoiler ? 10.4 : 8.0;
+    return pressureBar * _psiPerBar;
+  }
+
+  double get _selectedPressureValue {
+    if (_pressureInBar) {
+      return ((_boilerPressurePsi / _psiPerBar) * 10).round() / 10;
+    }
+    return _boilerPressurePsi.roundToDouble();
+  }
+
+  List<PickerOption<double>> get _pressureOptions {
+    if (_pressureInBar) {
+      return [
+        for (var tenth = 0; tenth <= 138; tenth++)
+          PickerOption(tenth / 10, (tenth / 10).toStringAsFixed(1)),
+      ];
+    }
+    return [
+      for (var psi = 0; psi <= 200; psi++) PickerOption(psi.toDouble(), '$psi'),
+    ];
+  }
+
+  void _selectPressure(double value) {
+    setState(() {
+      _boilerPressurePsi = _pressureInBar
+          ? math.min(value * _psiPerBar, 200)
+          : value;
+    });
+  }
+
+  void _setPressureUnit(bool useBar) {
+    if (_pressureInBar == useBar) return;
+    setState(() => _pressureInBar = useBar);
+  }
+
+  Widget _pressureUnitButton({
+    required String label,
+    required bool selected,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      height: 32,
+      child: selected
+          ? FilledButton(
+              onPressed: onPressed,
+              style: FilledButton.styleFrom(
+                padding: EdgeInsets.zero,
+                textStyle: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              child: Text(label),
+            )
+          : OutlinedButton(
+              onPressed: onPressed,
+              style: OutlinedButton.styleFrom(
+                padding: EdgeInsets.zero,
+                textStyle: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              child: Text(label),
+            ),
+    );
+  }
+
+  Future<void> _reviewAndSaveReading() async {
+    AuthenticatedOperator? operator;
+    try {
+      operator = await widget.operatorSession.currentOperator();
+    } catch (_) {
+      _setMessage(
+        MessageType.error,
+        'No fue posible verificar la sesion del usuario.',
+      );
       return;
     }
-    final waterTotal = _parseRequiredNumber(_waterController.text, 'agua');
-    if (waterTotal == null) {
+    if (!mounted) return;
+    if (operator == null) {
+      _setMessage(
+        MessageType.warning,
+        'Inicia sesion como usuario antes de guardar lecturas.',
+      );
       return;
     }
 
-    final steamText = _steamController.text.trim();
-    final steamTotal = steamText.isEmpty
-        ? null
-        : _parseRequiredNumber(steamText, 'vapor');
-    if (steamText.isNotEmpty && steamTotal == null) {
+    final boiler = boilerByName(_boilerName)!;
+    final boilerPressurePsi = _boilerPressurePsi;
+    if (_fuelInputValue <= 0) {
+      _setMessage(
+        MessageType.error,
+        'La lectura acumulada de bunker debe ser mayor que cero.',
+      );
       return;
     }
-
-    final pin = _pinController.text.trim();
-    if (pin.length != 4) {
-      _setMessage(MessageType.error, 'Ingresa el PIN de 4 numeros.');
+    if (_waterInputValue <= 0) {
+      _setMessage(
+        MessageType.error,
+        'La lectura acumulada de agua debe ser mayor que cero.',
+      );
       return;
     }
+    if (boiler.readsSteam && _steamInputValue <= 0) {
+      _setMessage(
+        MessageType.error,
+        'La lectura de vapor es obligatoria para Alfa Laval 1200.',
+      );
+      return;
+    }
+    final fuelInput = _fuelInputValue.toDouble();
+    final waterInput = _waterInputValue.toDouble();
+    final fuelTotal = _isAlfaLaval
+        ? alfaBunkerGallonsFromLiters(fuelInput)
+        : fuelInput;
+    final waterTotal = _isAlfaLaval
+        ? alfaWaterGallonsFromCounter(waterInput)
+        : waterInput;
+    final steamTotal = boiler.readsSteam ? _steamInputValue.toDouble() : null;
+    final originalInputs = <String, dynamic>{
+      'bunker': {
+        'value': fuelInput,
+        'unit': _isAlfaLaval ? 'L' : 'gal',
+        'gallons': fuelTotal,
+        if (_isAlfaLaval) 'litersPerGallon': alfaBunkerLitersPerGallon,
+      },
+      'water': {
+        'value': waterInput,
+        'unit': _isAlfaLaval ? 'counter_x10_L' : 'gal',
+        'gallons': waterTotal,
+        if (_isAlfaLaval) 'litersPerCounterUnit': alfaWaterLitersPerCounterUnit,
+        if (_isAlfaLaval)
+          'gallonsPerCounterUnit': alfaWaterGallonsPerCounterUnit,
+      },
+      if (boiler.readsSteam)
+        'steam': {'value': steamTotal, 'unit': 'gal', 'gallons': steamTotal},
+    };
 
-    final now = DateTime.now();
-    final rawReading = BoilerReading(
-      id: _createReadingId(),
+    final now = DateTime.now().toUtc();
+    final intervalStart = guayaquilHourStart(now);
+    final intervalEnd = intervalStart.add(const Duration(hours: 1));
+    final baseId = deterministicBoilerReadingId(boiler.id, intervalStart);
+    var rawReading = BoilerReading(
+      id: baseId,
       recordedAt: now,
       createdAt: now,
       boilerName: _boilerName,
+      boilerId: boiler.id,
+      readingMode: 'cumulative_meter',
       fuelTotal: fuelTotal,
       waterTotal: waterTotal,
-      steamTotal: _boilerName == alfaLavalBoiler ? steamTotal : null,
-      operatorPin: pin,
+      steamTotal: boiler.readsSteam ? steamTotal : null,
+      boilerPressurePsi: boilerPressurePsi,
+      boilerPressureUnit: defaultBoilerPressureUnit,
+      waterUnit: boiler.waterUnit,
+      bunkerUnit: boiler.bunkerUnit,
+      steamUnit: boiler.steamUnit,
+      intervalStart: intervalStart,
+      intervalEnd: intervalEnd,
+      rootRecordId: baseId,
+      validationWarnings: const [],
+      originalInputs: originalInputs,
+      validationReferenceVersion: boilerSafetyReferenceVersion,
+      notes: _notesController.text.trim(),
+      status: 'synced',
       fuelConsumption: null,
       waterConsumption: null,
       steamConsumption: null,
     );
 
-    setState(() {
-      _isSubmitting = true;
-      _messageType = MessageType.info;
-      _message = 'Calculando consumo y guardando lectura...';
-    });
-
-    BoilerReading? reading;
     try {
       final existing = await widget.consumptionStore.loadReadings();
-      reading = BoilerConsumptionCalculator.attachDeltas(rawReading, existing);
+      final sameInterval = existing
+          .where(
+            (reading) =>
+                reading.effectiveBoilerId == boiler.id &&
+                guayaquilHourStart(reading.recordedAt.toUtc()) == intervalStart,
+          )
+          .toList();
+      if (sameInterval.isNotEmpty) {
+        sameInterval.sort(
+          (left, right) => right.revision.compareTo(left.revision),
+        );
+        final latest = sameInterval.first;
+        if (operator.role != 'admin') {
+          _setMessage(
+            MessageType.warning,
+            'Ya existe una lectura para esta caldera y hora. Un administrador debe autorizar una revision.',
+          );
+          return;
+        }
+        final createRevision = await _confirmRevision(latest);
+        if (!mounted || createRevision != true) {
+          return;
+        }
+        final revision = latest.revision + 1;
+        rawReading = rawReading.copyWith(
+          id: '${baseId}_r$revision',
+          revision: revision,
+          replacesRecordId: latest.id,
+          rootRecordId: latest.rootRecordId ?? baseId,
+        );
+      }
+
+      final reading = BoilerConsumptionCalculator.attachDeltas(
+        rawReading,
+        existing,
+      );
+      if (reading.validationWarnings.isNotEmpty) {
+        final acceptedWarnings = await _confirmValidationWarnings(reading);
+        if (!mounted || acceptedWarnings != true) {
+          return;
+        }
+      }
+      final confirmed = await _confirmBoilerReading(reading, operator);
+      if (!mounted || confirmed != true) {
+        return;
+      }
+
+      setState(() {
+        _isSubmitting = true;
+        _messageType = MessageType.info;
+        _message = 'Guardando y esperando confirmacion de la nube...';
+      });
       await widget.consumptionStore.saveReading(reading);
       if (!mounted) {
         return;
@@ -973,13 +2555,24 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
       _finishSubmission(
         MessageType.success,
         'Lectura ingresada. ${_formatReadingDelta(reading)}',
+        reading,
       );
+    } on DuplicateBoilerReadingException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _messageType = MessageType.warning;
+        _message = error.message;
+      });
     } on ConsumptionSyncException catch (error) {
       if (!mounted) {
         return;
       }
-      final detail = reading == null ? '' : '\n${_formatReadingDelta(reading)}';
-      _finishSubmission(MessageType.warning, '${error.message}$detail');
+      setState(() {
+        _isSubmitting = false;
+        _messageType = MessageType.warning;
+        _message = error.message;
+      });
     } catch (error) {
       if (!mounted) {
         return;
@@ -992,41 +2585,234 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
     }
   }
 
-  double? _parseRequiredNumber(String raw, String label) {
-    final normalized = raw.replaceAll(',', '.').trim();
-    final value = double.tryParse(normalized);
-    if (value == null || value < 0) {
-      _setMessage(
-        MessageType.error,
-        'La lectura de $label debe ser un numero mayor o igual a cero.',
-      );
-      return null;
-    }
-    return value;
+  Future<bool?> _confirmRevision(BoilerReading previous) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Lectura existente'),
+          content: Text(
+            'Ya existe el registro ${previous.id}. La correccion creara una nueva revision y conservara el valor anterior.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Crear revision'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
-  void _finishSubmission(MessageType type, String message) {
+  Future<bool?> _confirmBoilerReading(
+    BoilerReading reading,
+    AuthenticatedOperator operator,
+  ) {
+    final mode = reading.readingMode == 'cumulative_meter'
+        ? 'Lectura acumulada'
+        : 'Consumo del intervalo';
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Confirmar lectura'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Caldera: ${reading.boilerName}'),
+                Text('Tipo: $mode'),
+                Text(
+                  'Presion: ${Formats.one(reading.boilerPressurePsi!)} PSI '
+                  '(${Formats.one(reading.boilerPressurePsi! / _psiPerBar)} bar)',
+                ),
+                Text(
+                  _isAlfaLaval
+                      ? 'Bunker: ${Formats.two(_fuelInputValue.toDouble())} L = '
+                            '${Formats.two(reading.fuelTotal)} gal'
+                      : 'Bunker: ${Formats.two(reading.fuelTotal)} '
+                            '(${_unitLabel(reading.bunkerUnit)})',
+                ),
+                Text(
+                  _isAlfaLaval
+                      ? 'Agua: ${Formats.two(alfaWaterLitersFromCounter(_waterInputValue.toDouble()))} L = '
+                            '${Formats.two(reading.waterTotal)} gal'
+                      : 'Agua: ${Formats.two(reading.waterTotal)} '
+                            '(${_unitLabel(reading.waterUnit)})',
+                ),
+                if (reading.steamTotal != null)
+                  Text(
+                    'Vapor: ${Formats.two(reading.steamTotal!)} (${_unitLabel(reading.steamUnit)})',
+                  ),
+                Text('Revision: ${reading.revision}'),
+                Text('Usuario: ${operator.displayName}'),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Corregir'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).pop(true),
+              icon: const Icon(Icons.cloud_upload_outlined),
+              label: const Text('Confirmar y guardar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<bool?> _confirmValidationWarnings(BoilerReading reading) {
+    final limits = boilerSafetyLimits[reading.effectiveBoilerId];
+    final messages = <String>[];
+    for (final warning in reading.validationWarnings) {
+      switch (warning) {
+        case 'bunker_meter_reset_or_negative_delta':
+          messages.add(
+            'La lectura de bunker es menor que la lectura anterior.',
+          );
+          break;
+        case 'water_meter_reset_or_negative_delta':
+          messages.add('La lectura de agua es menor que la lectura anterior.');
+          break;
+        case 'steam_meter_reset_or_negative_delta':
+          messages.add('La lectura de vapor es menor que la lectura anterior.');
+          break;
+        case 'bunker_delta_above_historical_range':
+          messages.add(
+            'El salto de bunker supera el rango historico'
+            '${limits == null ? '' : ' de ${Formats.noDecimal(limits.bunkerGallonsPerHour)} gal/h'}.',
+          );
+          break;
+        case 'water_delta_above_historical_range':
+          messages.add(
+            'El salto de agua supera el rango historico'
+            '${limits == null ? '' : ' de ${Formats.noDecimal(limits.waterGallonsPerHour)} gal/h'}.',
+          );
+          break;
+      }
+    }
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        title: const Text('Revisa los digitos'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'La lectura puede ser real, pero esta fuera del comportamiento habitual:',
+              ),
+              const SizedBox(height: 12),
+              for (final message in messages) ...[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('- '),
+                    Expanded(child: Text(message)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Corregir lectura'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Continuar de todas formas'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _finishSubmission(
+    MessageType type,
+    String message,
+    BoilerReading reading,
+  ) {
     setState(() {
       _isSubmitting = false;
-      _fuelController.clear();
-      _waterController.clear();
-      _steamController.clear();
-      _pinController.clear();
+      _boilerPressurePsi = _defaultPressurePsi(_boilerName);
+      _notesController.clear();
+      _latestReadingByBoiler = {
+        ..._latestReadingByBoiler,
+        _boilerName: reading,
+      };
+      _applyPreviousReading(reading);
       _messageType = type;
       _message = message;
     });
   }
 
+  void _applyPreviousReading(BoilerReading? reading) {
+    if (reading == null) {
+      _fuelInputValue = 0;
+      _waterInputValue = 0;
+      _steamInputValue = 0;
+      return;
+    }
+    if (_isAlfaLaval) {
+      _fuelInputValue =
+          (_originalInputValue(reading, 'bunker') ??
+                  reading.fuelTotal * alfaBunkerLitersPerGallon)
+              .round();
+      _waterInputValue =
+          (_originalInputValue(reading, 'water') ??
+                  reading.waterTotal / alfaWaterGallonsPerCounterUnit)
+              .round();
+    } else {
+      _fuelInputValue = reading.fuelTotal.round();
+      _waterInputValue = reading.waterTotal.round();
+    }
+    _steamInputValue = reading.steamTotal?.round() ?? 0;
+  }
+
+  double? _originalInputValue(BoilerReading reading, String key) {
+    final item = reading.originalInputs[key];
+    if (item is! Map) return null;
+    final value = item['value'];
+    return value is num ? value.toDouble() : double.tryParse('$value');
+  }
+
   String _formatReadingDelta(BoilerReading reading) {
     final parts = <String>[];
     if (reading.fuelConsumption != null) {
-      parts.add('combustible ${Formats.two(reading.fuelConsumption!)} unid.');
+      parts.add(
+        'bunker ${Formats.two(reading.fuelConsumption!)} ${_unitLabel(reading.bunkerUnit)}',
+      );
     }
     if (reading.waterConsumption != null) {
-      parts.add('agua ${Formats.two(reading.waterConsumption!)} unid.');
+      parts.add(
+        'agua ${Formats.two(reading.waterConsumption!)} ${_unitLabel(reading.waterUnit)}',
+      );
     }
     if (reading.steamConsumption != null) {
-      parts.add('vapor ${Formats.two(reading.steamConsumption!)} unid.');
+      parts.add(
+        'vapor ${Formats.two(reading.steamConsumption!)} ${_unitLabel(reading.steamUnit)}',
+      );
     }
     if (parts.isEmpty) {
       return 'Es la primera lectura disponible para esta caldera; los consumos se calcularan desde la siguiente lectura.';
@@ -1041,35 +2827,37 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
     });
   }
 
-  String _createReadingId() {
-    final random = math.Random().nextInt(1 << 32).toRadixString(16);
-    return '${DateTime.now().millisecondsSinceEpoch}-$random';
-  }
+  String _unitLabel(String unit) =>
+      unit == pendingUnit ? 'unidad pendiente' : unit;
 }
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({
     required this.reportStore,
     required this.consumptionStore,
+    required this.maintenanceReportStore,
     super.key,
   });
 
   final ReportStore reportStore;
   final ConsumptionStore consumptionStore;
+  final MaintenanceReportStore maintenanceReportStore;
 
   @override
   State<AdminScreen> createState() => _AdminScreenState();
 }
 
-enum AdminPanelTab { barePipe, consumption }
+enum AdminPanelTab { barePipe, consumption, leaks }
 
 enum ConsumptionScale { hour, day, week, month, year }
 
 class _AdminScreenState extends State<AdminScreen> {
   List<BarePipeReport> _reports = [];
   List<BoilerReading> _readings = [];
+  List<MaintenanceReportSummary> _maintenanceReports = [];
   var _isLoadingReports = true;
   var _isLoadingReadings = true;
+  var _isLoadingMaintenance = true;
   var _selectedTab = AdminPanelTab.barePipe;
   var _consumptionScale = ConsumptionScale.hour;
   var _selectedBoiler = '';
@@ -1079,15 +2867,30 @@ class _AdminScreenState extends State<AdminScreen> {
     super.initState();
     _loadReports();
     _loadReadings();
+    _loadMaintenanceReports();
   }
 
   @override
   Widget build(BuildContext context) {
     return AppShell(
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedTab.index,
+        selectedIndex: switch (_selectedTab) {
+          AdminPanelTab.barePipe => 0,
+          AdminPanelTab.consumption => 1,
+          AdminPanelTab.leaks => 3,
+        },
         onDestinationSelected: (index) {
-          setState(() => _selectedTab = AdminPanelTab.values[index]);
+          if (index == 2) {
+            returnToHome(context);
+            return;
+          }
+          setState(() {
+            _selectedTab = switch (index) {
+              0 => AdminPanelTab.barePipe,
+              1 => AdminPanelTab.consumption,
+              _ => AdminPanelTab.leaks,
+            };
+          });
         },
         destinations: const [
           NavigationDestination(
@@ -1100,10 +2903,19 @@ class _AdminScreenState extends State<AdminScreen> {
             selectedIcon: Icon(Icons.local_fire_department),
             label: 'Consumos',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Casa',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.water_drop_outlined),
+            selectedIcon: Icon(Icons.water_drop),
+            label: 'Fugas',
+          ),
         ],
       ),
       children: [
-        const BackToHomeButton(),
         const EeHeader(
           title: 'Panel administrador',
           subtitle: 'Indicadores de campo para eficiencia energetica.',
@@ -1119,7 +2931,7 @@ class _AdminScreenState extends State<AdminScreen> {
         ),
         if (_selectedTab == AdminPanelTab.barePipe)
           BarePipeAdminTab(reports: _reports, isLoading: _isLoadingReports)
-        else
+        else if (_selectedTab == AdminPanelTab.consumption)
           ConsumptionAdminTab(
             readings: _readings,
             isLoading: _isLoadingReadings,
@@ -1128,21 +2940,32 @@ class _AdminScreenState extends State<AdminScreen> {
             onBoilerChanged: (value) => setState(() => _selectedBoiler = value),
             onScaleChanged: (value) =>
                 setState(() => _consumptionScale = value),
+          )
+        else
+          LeakAdminTab(
+            reports: _maintenanceReports
+                .where((item) => item.type == MaintenanceReportType.leak)
+                .toList(),
+            isLoading: _isLoadingMaintenance,
           ),
       ],
     );
   }
 
   bool _isCurrentTabLoading() {
-    return _selectedTab == AdminPanelTab.barePipe
-        ? _isLoadingReports
-        : _isLoadingReadings;
+    return switch (_selectedTab) {
+      AdminPanelTab.barePipe => _isLoadingReports,
+      AdminPanelTab.consumption => _isLoadingReadings,
+      AdminPanelTab.leaks => _isLoadingMaintenance,
+    };
   }
 
   Future<void> _refreshCurrentTab() {
-    return _selectedTab == AdminPanelTab.barePipe
-        ? _loadReports()
-        : _loadReadings();
+    return switch (_selectedTab) {
+      AdminPanelTab.barePipe => _loadReports(),
+      AdminPanelTab.consumption => _loadReadings(),
+      AdminPanelTab.leaks => _loadMaintenanceReports(),
+    };
   }
 
   Future<void> _loadReports() async {
@@ -1163,6 +2986,21 @@ class _AdminScreenState extends State<AdminScreen> {
       _readings = readings;
       _isLoadingReadings = false;
     });
+  }
+
+  Future<void> _loadMaintenanceReports() async {
+    setState(() => _isLoadingMaintenance = true);
+    try {
+      final reports = await widget.maintenanceReportStore.loadReports();
+      if (!mounted) return;
+      setState(() {
+        _maintenanceReports = reports;
+        _isLoadingMaintenance = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingMaintenance = false);
+    }
   }
 }
 
@@ -1237,26 +3075,6 @@ class EeHeader extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class BackToHomeButton extends StatelessWidget {
-  const BackToHomeButton({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: TextButton.icon(
-        onPressed: () => Navigator.of(context).pop(),
-        icon: const Icon(Icons.arrow_back),
-        label: const Text('Volver a EE'),
-        style: TextButton.styleFrom(
-          foregroundColor: tealColor,
-          textStyle: const TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
     );
@@ -1749,8 +3567,12 @@ class _UpdateAvailableDialogState extends State<UpdateAvailableDialog> {
             ),
           FilledButton.icon(
             onPressed: _isOpening ? null : _openUpdateUrl,
-            icon: const Icon(Icons.open_in_new),
-            label: Text(_isOpening ? 'Abriendo...' : 'Actualizar'),
+            icon: Icon(kIsWeb ? Icons.refresh : Icons.open_in_new),
+            label: Text(
+              _isOpening
+                  ? (kIsWeb ? 'Recargando...' : 'Abriendo...')
+                  : (kIsWeb ? 'Recargar ahora' : 'Actualizar'),
+            ),
           ),
         ],
       ),
@@ -1772,7 +3594,17 @@ class _UpdateAvailableDialogState extends State<UpdateAvailableDialog> {
       _isOpening = true;
       _message = '';
     });
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final opened = kIsWeb
+        ? await launchUrl(
+            uri.replace(
+              queryParameters: {
+                ...uri.queryParameters,
+                'build': '${widget.notice.latestBuildNumber}',
+              },
+            ),
+            webOnlyWindowName: '_self',
+          )
+        : await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!mounted) {
       return;
     }
@@ -1840,6 +3672,100 @@ class BarePipeAdminTab extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         RecentReportsPanel(reports: reports),
+      ],
+    );
+  }
+}
+
+class LeakAdminTab extends StatelessWidget {
+  const LeakAdminTab({
+    required this.reports,
+    required this.isLoading,
+    super.key,
+  });
+
+  final List<MaintenanceReportSummary> reports;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final open = reports.where((item) => !item.workOrderCreated).length;
+    final withOrder = reports
+        .where((item) => item.workOrderCreated && !item.workCompleted)
+        .length;
+    final completed = reports.where((item) => item.workCompleted).length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (isLoading) ...[
+          const LinearProgressIndicator(minHeight: 3),
+          const SizedBox(height: 12),
+        ],
+        MetricGrid(
+          metrics: [
+            Metric('Reportadas', reports.length.toString()),
+            Metric('Sin OT', open.toString()),
+            Metric('Con OT', withOrder.toString()),
+            Metric('Ejecutadas', completed.toString()),
+          ],
+        ),
+        const SizedBox(height: 14),
+        InfoPanel(
+          children: [
+            Text(
+              'Ultimas fugas reportadas',
+              style: Theme.of(context).textTheme.titleMediumBold,
+            ),
+            const SizedBox(height: 12),
+            if (reports.isEmpty)
+              const EmptyState(
+                text: 'Las fugas apareceran aqui cuando sean reportadas.',
+              )
+            else
+              for (final report in reports.take(12)) ...[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ReportThumbnail(url: report.photoUrl),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            report.sectionName,
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                          Text(report.detail),
+                          if (report.equipmentName.isNotEmpty)
+                            Text(
+                              report.equipmentName,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          const SizedBox(height: 4),
+                          Text(
+                            report.workCompleted
+                                ? 'Trabajo ejecutado'
+                                : report.workOrderCreated
+                                ? 'OT generada'
+                                : 'Pendiente de OT',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: report.workCompleted
+                                      ? tealColor
+                                      : brandRedDark,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 20),
+              ],
+          ],
+        ),
       ],
     );
   }
@@ -2533,7 +4459,7 @@ class RecentBoilerReadingTile extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                '${Formats.date(reading.recordedAt)} - PIN ${reading.operatorPin}',
+                '${Formats.date(reading.recordedAt)} - ${reading.createdByNameSnapshot.isEmpty ? 'Registro historico' : reading.createdByNameSnapshot}',
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: mutedColor),

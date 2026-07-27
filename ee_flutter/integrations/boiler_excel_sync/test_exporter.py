@@ -8,10 +8,14 @@ from datetime import date, datetime, timezone
 from unittest.mock import Mock, patch
 
 from exporter import (
+    acknowledged_cursor_utc,
     allocate_hourly,
     build_daily_summaries,
     build_intervals,
     build_power_automate_payload,
+    delivery_remaining_dates,
+    delivery_status,
+    load_github_issue_payload,
     latest_revisions,
     publish_payload_to_github_issue,
     reading_from_dict,
@@ -103,8 +107,15 @@ class ExporterTests(unittest.TestCase):
         first = reading("a", "2026-07-24T05:30:00Z", 100, 200)
         second = reading("b", "2026-07-24T07:00:00Z", 130, 260)
         payload = build_power_automate_payload([first, second])
+        self.assertEqual(payload["schemaVersion"], 2)
         self.assertEqual(payload["collection"], "boiler_consumption_readings")
         self.assertEqual(len(payload["datasets"]["raw"]["rows"]), 2)
+        self.assertEqual(payload["delivery"]["status"], "ready")
+        self.assertEqual(payload["delivery"]["rawRowCount"], 2)
+        self.assertEqual(
+            payload["delivery"]["cursorEndUtc"],
+            "2026-07-24T07:00:00+00:00",
+        )
         daily = payload["datasets"]["daily"]["rows"]
         self.assertEqual(daily[0][0], "2026-07-24|alfa_laval_1200")
         self.assertAlmostEqual(daily[0][13], 30)
@@ -173,6 +184,96 @@ class ExporterTests(unittest.TestCase):
             datetime(2026, 7, 24, 18, tzinfo=timezone.utc)
         )
         self.assertEqual(result.isoformat(), "2026-07-24T05:00:00+00:00")
+
+    def test_acknowledged_delivery_exposes_cursor(self):
+        payload = {
+            "delivery": {
+                "status": "acknowledged",
+                "cursorEndUtc": "2026-07-27T18:00:00Z",
+            }
+        }
+        self.assertEqual(delivery_status(payload), "acknowledged")
+        self.assertEqual(
+            acknowledged_cursor_utc(payload),
+            datetime(2026, 7, 27, 18, tzinfo=timezone.utc),
+        )
+
+    def test_queued_dates_keep_cursor_at_confirmed_start(self):
+        payload = {
+            "delivery": {
+                "status": "acknowledged",
+                "cursorStartUtc": "2026-07-27T10:00:00Z",
+                "cursorEndUtc": "2026-07-27T18:00:00Z",
+                "remainingDates": ["2026-07-26", "2026-07-27"],
+            }
+        }
+        self.assertEqual(
+            delivery_remaining_dates(payload),
+            [date(2026, 7, 26), date(2026, 7, 27)],
+        )
+        self.assertEqual(
+            acknowledged_cursor_utc(payload),
+            datetime(2026, 7, 27, 10, tzinfo=timezone.utc),
+        )
+
+    def test_date_payload_carries_remaining_dates_and_final_cursor(self):
+        first = reading("a", "2026-07-24T05:30:00Z", 100, 200)
+        payload = build_power_automate_payload(
+            [first],
+            target_local_date=date(2026, 7, 24),
+            cursor_start_utc=datetime(
+                2026,
+                7,
+                23,
+                18,
+                tzinfo=timezone.utc,
+            ),
+            cursor_end_utc=datetime(
+                2026,
+                7,
+                27,
+                18,
+                tzinfo=timezone.utc,
+            ),
+            remaining_dates=[date(2026, 7, 25), date(2026, 7, 26)],
+        )
+        self.assertEqual(
+            payload["delivery"]["remainingDates"],
+            ["2026-07-25", "2026-07-26"],
+        )
+        self.assertEqual(
+            payload["delivery"]["cursorEndUtc"],
+            "2026-07-27T18:00:00+00:00",
+        )
+
+    @patch.dict(
+        os.environ,
+        {
+            "EE_DATA_REPOSITORY": "owner/private-data",
+            "EE_DATA_ISSUE_NUMBER": "7",
+            "EE_DATA_REPO_TOKEN": "secret-token",
+        },
+        clear=False,
+    )
+    def test_load_issue_payload_reads_acknowledgement(self):
+        response = Mock()
+        response.json.return_value = {
+            "body": json.dumps(
+                {
+                    "schemaVersion": 2,
+                    "delivery": {"status": "acknowledged"},
+                }
+            )
+        }
+        requests_module = Mock()
+        requests_module.get.return_value = response
+
+        with patch.dict(sys.modules, {"requests": requests_module}):
+            payload = load_github_issue_payload()
+
+        self.assertEqual(delivery_status(payload), "acknowledged")
+        requests_module.get.assert_called_once()
+        response.raise_for_status.assert_called_once()
 
     @patch.dict(
         os.environ,

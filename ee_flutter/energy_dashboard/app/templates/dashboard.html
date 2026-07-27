@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Dashboard | Eficiencia Energetica EE{% endblock %}
+{% block head %}
+<script src="https://cdn.plot.ly/plotly-3.1.0.min.js" defer></script>
+<script src="{{ url_for('static', path='dashboard.js') }}" defer></script>
+{% endblock %}
+{% block body %}
+<header class="topbar">
+  <div>
+    <span class="topbar-brand">Eficiencia Energetica EE</span>
+    <span class="updated">Actualizado {{ last_updated.strftime('%Y-%m-%d %H:%M') }} America/Guayaquil</span>
+  </div>
+  <div class="operator">
+    <span>{{ admin.display_name }}</span>
+    <form method="post" action="/logout"><button class="icon-button" title="Cerrar sesion" aria-label="Cerrar sesion">↪</button></form>
+  </div>
+</header>
+
+<main class="dashboard">
+  <form method="get" class="filter-band">
+    <label>Desde<input type="date" name="start_date" value="{{ start_date }}"></label>
+    <label>Hasta<input type="date" name="end_date" value="{{ end_date }}"></label>
+    <label>Seccion
+      <select name="section_id">
+        <option value="">Todas</option>
+        {% for value, label in [
+          ('refineria','Refineria'),('confiteria_galleteria','Confiteria y Galleteria'),
+          ('desodorizacion','Desodorizacion'),('fraccionamiento','Fraccionamiento'),
+          ('manteca','Manteca'),('aceites','Aceites'),('hidrogenacion','Hidrogenacion'),
+          ('jaboneria','Jaboneria'),('recepcion','Recepcion'),('dex','DEX'),
+          ('servicios_industriales','Servicios Industriales'),('margarina','Margarina')
+        ] %}
+        <option value="{{ value }}" {% if filters.section_id == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Equipo<input name="equipment" value="{{ filters.equipment }}" placeholder="Buscar"></label>
+    <label>Usuario UID<input name="user_uid" value="{{ filters.user_uid }}"></label>
+    <label>Modulo
+      <select name="module">
+        {% for value, label in [('all','Todos'),('traps','Trampas'),('bare_pipe','Tuberia'),('boilers','Calderas'),('pumps','Bombas'),('leaks','Fugas')] %}
+        <option value="{{ value }}" {% if filters.module == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Caldera<input name="boiler_id" value="{{ filters.boiler_id }}"></label>
+    <label>Agrupar
+      <select name="grouping">
+        {% for value, label in [('hour','Hora'),('day','Dia'),('week','Semana'),('month','Mes')] %}
+        <option value="{{ value }}" {% if filters.grouping == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="filter-actions">
+      <button type="submit">Aplicar</button>
+      <a class="secondary-button" href="/export.csv?{{ request.url.query }}">CSV</a>
+    </div>
+  </form>
+
+  <section class="kpi-grid">
+    {% for label, value, unit in [
+      ('Trampas dimensionadas', data.kpis.trapCount, ''),
+      ('Tuberia desnuda', data.kpis.barePipeMeters, 'm'),
+      ('Perdida termica', data.kpis.thermalLossKw, 'kW'),
+      ('Bunker del periodo', data.kpis.bunkerTotal, ''),
+      ('Agua del periodo', data.kpis.waterTotal, ''),
+      ('Vapor medido', data.kpis.steamTotal, ''),
+      ('Bombas levantadas', data.kpis.pumpCount, ''),
+      ('Potencia de bombas', data.kpis.pumpPowerKw, 'kW'),
+      ('Energia estimada', data.kpis.pumpEnergyKwh, 'kWh'),
+      ('Cobertura horaria', data.kpis.coveragePercent, '%'),
+      ('Registros incompletos', data.kpis.incompleteRecords, ''),
+      ('Atipicos de bunker', data.kpis.boilerOutliers, ''),
+      ('Fugas reportadas', data.kpis.leakCount, ''),
+      ('Fugas pendientes', data.kpis.openLeakCount, '')
+    ] %}
+    <article class="kpi"><span>{{ label }}</span><strong>{{ '%.2f'|format(value) if value is number else value }} {{ unit }}</strong></article>
+    {% endfor %}
+  </section>
+
+  <section class="module-section">
+    <h2>Dimensionamiento de trampas</h2>
+    <div class="chart-grid">
+      <article class="chart"><div id="trap-time"></div></article>
+      <article class="chart"><div id="trap-sections"></div></article>
+      <article class="chart"><div id="trap-types"></div></article>
+      <article class="chart"><div id="trap-methods"></div></article>
+      <article class="chart"><div id="trap-equipment"></div></article>
+    </div>
+  </section>
+
+  <section class="module-section">
+    <h2>Tuberia desnuda</h2>
+    <div class="chart-grid">
+      <article class="chart"><div id="pipe-meters"></div></article>
+      <article class="chart"><div id="pipe-loss"></div></article>
+      <article class="chart"><div id="pipe-diameter"></div></article>
+      <article class="chart"><div id="pipe-time"></div></article>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>Seccion</th><th>Equipo</th><th>kW</th><th>m</th></tr></thead><tbody>
+      {% for row in data.barePipe.top %}<tr><td>{{ row.section }}</td><td>{{ row.equipment }}</td><td>{{ '%.2f'|format(row.lossKw) }}</td><td>{{ '%.2f'|format(row.lengthM) }}</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+
+  <section class="module-section">
+    <h2>Calderas</h2>
+    <div class="chart-grid">
+      <article class="chart"><div id="boiler-bunker"></div></article>
+      <article class="chart"><div id="boiler-water"></div></article>
+      <article class="chart"><div id="boiler-steam"></div></article>
+      <article class="chart"><div id="boiler-share"></div></article>
+    </div>
+  </section>
+
+  <section class="module-section">
+    <h2>Bombas</h2>
+    <div class="chart-grid">
+      <article class="chart"><div id="pump-power"></div></article>
+      <article class="chart"><div id="pump-count"></div></article>
+      <article class="chart"><div id="pump-hp-kw"></div></article>
+      <article class="chart"><div id="pump-unbalance"></div></article>
+      <article class="chart"><div id="pump-confidence"></div></article>
+      <article class="chart"><div id="pump-ranges"></div></article>
+      <article class="chart"><div id="pump-savings"></div></article>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>Tag</th><th>Seccion</th><th>Potencia kW</th></tr></thead><tbody>
+      {% for row in data.pumps.topDemand %}<tr><td>{{ row.tag }}</td><td>{{ row.section }}</td><td>{{ '%.2f'|format(row.powerKw) }}</td></tr>{% endfor %}
+    </tbody></table></div>
+    <h3>Candidatas a revision hidraulica</h3>
+    <div class="table-wrap"><table><thead><tr><th>Tag</th><th>Seccion</th><th>Potencia kW</th></tr></thead><tbody>
+      {% for row in data.pumps.candidates %}<tr><td>{{ row.tag }}</td><td>{{ row.section }}</td><td>{{ '%.2f'|format(row.powerKw) }}</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+
+  <section class="module-section">
+    <h2>Fugas reportadas</h2>
+    <div class="chart-grid">
+      <article class="chart"><div id="leak-time"></div></article>
+      <article class="chart"><div id="leak-types"></div></article>
+      <article class="chart"><div id="leak-sections"></div></article>
+      <article class="chart"><div id="leak-statuses"></div></article>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>Numero</th><th>Tipo</th><th>Seccion</th><th>Equipo</th><th>Estado</th></tr></thead><tbody>
+      {% for row in data.leaks.rows %}<tr><td>{{ row.tag }}</td><td>{{ row.type }}</td><td>{{ row.section }}</td><td>{{ row.equipment }}</td><td>{{ row.status }}</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+
+  <section class="module-section">
+    <h2>Registros filtrados</h2>
+    <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Modulo</th><th>Seccion</th><th>Equipo</th><th>Usuario</th><th>Estado</th></tr></thead><tbody>
+      {% for row in records %}<tr><td>{{ row.date }}</td><td>{{ row.module }}</td><td>{{ row.section }}</td><td>{{ row.equipment }}</td><td>{{ row.user }}</td><td>{{ row.status }}</td></tr>{% endfor %}
+    </tbody></table></div>
+    <nav class="pagination">
+      {% if has_previous %}<a href="{{ request.url.include_query_params(page=page-1) }}">Anterior</a>{% endif %}
+      <span>Pagina {{ page }}</span>
+      {% if has_next %}<a href="{{ request.url.include_query_params(page=page+1) }}">Siguiente</a>{% endif %}
+    </nav>
+  </section>
+</main>
+<script id="dashboard-data" type="application/json">{{ data_json|safe }}</script>
+{% endblock %}

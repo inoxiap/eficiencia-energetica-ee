@@ -32,6 +32,16 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/.firebase/
+/functions/lib/
+/functions/node_modules/
+/functions/.secret.local
+/energy_dashboard/.venv/
+.env
+.env.*
+!.env.example
+*service-account*.json
+serviceAccountKey.json
 
 # Symbolication related
 app.*.symbols

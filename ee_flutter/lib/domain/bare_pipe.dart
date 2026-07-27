@@ -1,5 +1,8 @@
 import 'dart:math' as math;
 
+const barePipeSchemaVersion = 1;
+const barePipeFormulaVersion = 'bare-pipe-v1';
+
 const barePipeSections = <String>[
   'Jaboneria',
   'Margarina',
@@ -117,6 +120,14 @@ class BarePipeReport {
     required this.photoUrl,
     required this.photoPublicId,
     required this.calculation,
+    this.sectionId = '',
+    this.sectionNameSnapshot = '',
+    this.equipmentName = '',
+    this.equipmentNameNormalized = '',
+    this.notes = '',
+    this.photoProvider = 'cloudinary',
+    this.status = 'synced',
+    this.syncError,
   });
 
   final String id;
@@ -128,6 +139,14 @@ class BarePipeReport {
   final String photoUrl;
   final String photoPublicId;
   final BarePipeCalculation calculation;
+  final String sectionId;
+  final String sectionNameSnapshot;
+  final String equipmentName;
+  final String equipmentNameNormalized;
+  final String notes;
+  final String photoProvider;
+  final String status;
+  final String? syncError;
 
   String get thumbnailUrl {
     if (!photoUrl.contains('/upload/')) {
@@ -149,10 +168,43 @@ class BarePipeReport {
     'photoUrl': photoUrl,
     'photoPublicId': photoPublicId,
     'calculation': calculation.toJson(),
+    'sectionId': sectionId,
+    'sectionNameSnapshot': sectionNameSnapshot,
+    'equipmentName': equipmentName,
+    'equipmentNameNormalized': equipmentNameNormalized,
+    'notes': notes,
+    'photoProvider': photoProvider,
+    'status': status,
+    'syncError': syncError,
+    'schemaVersion': barePipeSchemaVersion,
+    'formulaVersion': barePipeFormulaVersion,
   };
 
+  BarePipeReport copyWith({String? status, String? syncError}) {
+    return BarePipeReport(
+      id: id,
+      createdAt: createdAt,
+      section: section,
+      diameterLabel: diameterLabel,
+      pressureBarG: pressureBarG,
+      lengthMeters: lengthMeters,
+      photoUrl: photoUrl,
+      photoPublicId: photoPublicId,
+      calculation: calculation,
+      sectionId: sectionId,
+      sectionNameSnapshot: sectionNameSnapshot,
+      equipmentName: equipmentName,
+      equipmentNameNormalized: equipmentNameNormalized,
+      notes: notes,
+      photoProvider: photoProvider,
+      status: status ?? this.status,
+      syncError: syncError ?? this.syncError,
+    );
+  }
+
   factory BarePipeReport.fromJson(Map<String, dynamic> json) {
-    final created = DateTime.tryParse(json['createdAt'] as String? ?? '');
+    final created =
+        _toDateTime(json['createdAt']) ?? _toDateTime(json['capturedAtLocal']);
     final calculationJson = json['calculation'];
     return BarePipeReport(
       id: json['id'] as String? ?? '',
@@ -166,6 +218,17 @@ class BarePipeReport {
       calculation: calculationJson is Map<String, dynamic>
           ? BarePipeCalculation.fromJson(calculationJson)
           : BarePipeCalculation.pending,
+      sectionId: json['sectionId'] as String? ?? '',
+      sectionNameSnapshot:
+          json['sectionNameSnapshot'] as String? ??
+          json['section'] as String? ??
+          '',
+      equipmentName: json['equipmentName'] as String? ?? '',
+      equipmentNameNormalized: json['equipmentNameNormalized'] as String? ?? '',
+      notes: json['notes'] as String? ?? '',
+      photoProvider: json['photoProvider'] as String? ?? 'cloudinary',
+      status: json['status'] as String? ?? 'synced',
+      syncError: json['syncError'] as String?,
     );
   }
 }
@@ -283,4 +346,20 @@ double? _toDoubleOrNull(Object? value) {
     return double.tryParse(value);
   }
   return null;
+}
+
+DateTime? _toDateTime(Object? value) {
+  if (value is DateTime) {
+    return value;
+  }
+  if (value is String) {
+    return DateTime.tryParse(value);
+  }
+  try {
+    final dynamic candidate = value;
+    final converted = candidate.toDate();
+    return converted is DateTime ? converted : null;
+  } catch (_) {
+    return null;
+  }
 }

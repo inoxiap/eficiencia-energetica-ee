@@ -18,6 +18,8 @@ Firestore conserva la fuente oficial de los datos.
    Office Script `EE - Sincronizar consumos de calderas`.
 6. El script actualiza el libro maestro por claves estables, sin duplicar filas
    y sin reemplazar el historial existente.
+7. Solamente despues de una escritura correcta, Power Automate reemplaza el
+   cuerpo del issue por el acuse devuelto por el Office Script.
 
 Se descarto el disparador HTTP de Power Automate porque requiere licencia
 Premium. Tambien se descarto guardar el payload en el repositorio publico del
@@ -55,6 +57,19 @@ La sincronizacion es incremental e idempotente:
 El workflow consulta Firestore por `createdAt` del servidor antes de traer el
 contexto minimo de las fechas y calderas afectadas. Esto permite recuperar
 lecturas creadas en la nube con retraso sin recorrer la coleccion completa.
+El acuse conserva `cursorEndUtc`; la siguiente ejecucion consulta solo
+documentos creados despues de ese cursor. Si el issue contiene un lote
+`ready`, GitHub Actions no consulta Firestore ni sobrescribe el lote hasta que
+Power Automate lo marque como `acknowledged`.
+Si un atraso de varios dias no cabe en el issue, el exportador publica la fecha
+mas antigua y conserva las restantes en `remainingDates`. El cursor solo avanza
+al ultimo documento cuando todas las fechas en cola fueron confirmadas.
+
+Con la ejecucion horaria prevista, el flujo consume como maximo unas 720
+ejecuciones privadas de GitHub Actions al mes. Cada ciclo normal lee solamente
+los documentos nuevos mas el contexto de las fechas afectadas, y Power Automate
+usa cuatro acciones estandar. Los lotes se rechazan antes de publicar si se
+acercan al limite seguro de 60.000 caracteres del issue.
 
 ## Ejecucion local
 
@@ -108,6 +123,9 @@ Flujo programado cada hora:
    `/MEJORAS/1. SEGUIMIENTO DE LA ENERGIA/REPORTE DE CALDERAS 2018.xlsx`.
 5. Script: `EE - Sincronizar consumos de calderas`.
 6. Parametro `payloadJson`: cuerpo del issue obtenido en el paso 2.
+7. `GitHub / Update an issue`, ejecutado despues de `Run script`.
+8. En `Body`, usar directamente el resultado del Office Script. Ese resultado
+   es el acuse JSON con estado `acknowledged` y el cursor confirmado.
 
 La cuenta Microsoft usada es `Asistente Proyectos Mantenimiento`. El libro debe
 estar cerrado en Excel de escritorio durante la primera prueba integral para

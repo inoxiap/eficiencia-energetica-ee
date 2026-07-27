@@ -10,6 +10,17 @@ interface SyncPayload {
   generatedAtUtc: string;
   timezone: string;
   collection: string;
+  mode?: string;
+  delivery?: {
+    status: string;
+    batchId: string;
+    cursorStartUtc: string;
+    cursorEndUtc: string;
+    targetLocalDate: string;
+    rawRowCount: number;
+    remainingDates?: string[];
+    acknowledgedAtUtc?: string;
+  };
   datasets: {
     raw: SyncDataset;
     intervals: SyncDataset;
@@ -71,16 +82,45 @@ function main(workbook: ExcelScript.Workbook, payloadJson: string): string {
     payload.generatedAtUtc,
   );
   writeControlSheet(workbook, payload, result, datasetResults);
-  return JSON.stringify({ master: result, datasets: datasetResults });
+  return buildAcknowledgement(payload);
 }
 
 function validatePayload(payload: SyncPayload): void {
-  if (payload.schemaVersion !== 1) {
+  if (payload.schemaVersion !== 1 && payload.schemaVersion !== 2) {
     throw new Error(`Unsupported payload schema: ${payload.schemaVersion}`);
   }
   if (!payload.datasets?.raw || !payload.datasets?.daily) {
     throw new Error("The payload does not contain the required datasets.");
   }
+}
+
+function buildAcknowledgement(payload: SyncPayload): string {
+  const emptyDataset: SyncDataset = { headers: [], rows: [] };
+  return JSON.stringify({
+    schemaVersion: 2,
+    generatedAtUtc: new Date().toISOString(),
+    timezone: payload.timezone,
+    collection: payload.collection,
+    mode: "acknowledgement",
+    windowStartUtc: payload.delivery?.cursorEndUtc ?? "",
+    affectedDates: [],
+    delivery: {
+      status: "acknowledged",
+      batchId: payload.delivery?.batchId ?? "",
+      cursorStartUtc: payload.delivery?.cursorStartUtc ?? "",
+      cursorEndUtc: payload.delivery?.cursorEndUtc ?? "",
+      targetLocalDate: payload.delivery?.targetLocalDate ?? "",
+      rawRowCount: payload.delivery?.rawRowCount ?? 0,
+      remainingDates: payload.delivery?.remainingDates ?? [],
+      acknowledgedAtUtc: new Date().toISOString(),
+    },
+    datasets: {
+      raw: emptyDataset,
+      intervals: emptyDataset,
+      hourly: emptyDataset,
+      daily: emptyDataset,
+    },
+  });
 }
 
 function normalizeCell(value: unknown): CellValue {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from collections import defaultdict
@@ -13,7 +14,7 @@ from zoneinfo import ZoneInfo
 
 LOCAL_ZONE = ZoneInfo("America/Guayaquil")
 COLLECTION_NAME = "boiler_consumption_readings"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 BOILER_MASTER_NAMES = {
     "alfa_laval_1200": "CalAlfa",
     "distral_900": "900Distral",
@@ -457,7 +458,7 @@ def load_firestore_readings(
     else:
         cutoff = changed_since_utc.astimezone(timezone.utc)
         changed_documents = (
-            collection.where(filter=FieldFilter("createdAt", ">=", cutoff))
+            collection.where(filter=FieldFilter("createdAt", ">", cutoff))
             .order_by("createdAt")
             .stream()
         )
@@ -851,6 +852,9 @@ def build_power_automate_payload(
     *,
     changed_since_utc: datetime | None = None,
     target_local_date: date | None = None,
+    cursor_start_utc: datetime | None = None,
+    cursor_end_utc: datetime | None = None,
+    remaining_dates: Iterable[date] = (),
 ) -> dict[str, Any]:
     intervals = build_intervals(readings)
     allocations = allocate_hourly(intervals)
@@ -1094,9 +1098,38 @@ def build_power_automate_payload(
                 summary.bunker_gal / water_tons if water_tons > 0 else None,
             ]
         )
+    generated_at_utc = datetime.now(timezone.utc).isoformat()
+    cursor_candidates = [
+        reading.created_at or reading.recorded_at for reading in payload_readings
+    ]
+    resolved_cursor_end_utc = cursor_end_utc or (
+        max(cursor_candidates).astimezone(timezone.utc)
+        if cursor_candidates
+        else cursor_start_utc
+    )
+    cursor_start_text = (
+        cursor_start_utc.astimezone(timezone.utc).isoformat()
+        if cursor_start_utc is not None
+        else ""
+    )
+    cursor_end_text = (
+        resolved_cursor_end_utc.astimezone(timezone.utc).isoformat()
+        if resolved_cursor_end_utc
+        else ""
+    )
+    remaining_date_values = sorted(set(remaining_dates))
+    batch_seed = "|".join(
+        [
+            target_local_date.isoformat() if target_local_date else "incremental",
+            cursor_start_text,
+            cursor_end_text,
+            *sorted(reading.document_id for reading in payload_readings),
+        ]
+    )
+    batch_id = hashlib.sha256(batch_seed.encode("utf-8")).hexdigest()[:20]
     return {
-        "schemaVersion": 1,
-        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "schemaVersion": SCHEMA_VERSION,
+        "generatedAtUtc": generated_at_utc,
         "timezone": "America/Guayaquil",
         "collection": COLLECTION_NAME,
         "mode": (
@@ -1118,6 +1151,20 @@ def build_power_automate_payload(
             if affected_days is not None
             else []
         ),
+        "delivery": {
+            "status": "ready",
+            "batchId": batch_id,
+            "cursorStartUtc": cursor_start_text,
+            "cursorEndUtc": cursor_end_text,
+            "targetLocalDate": (
+                target_local_date.isoformat() if target_local_date else ""
+            ),
+            "rawRowCount": len(raw_rows),
+            "remainingDates": [
+                pending_date.isoformat()
+                for pending_date in remaining_date_values
+            ],
+        },
         "datasets": {
             "raw": {"headers": raw_headers, "rows": raw_rows},
             "intervals": {"headers": interval_headers, "rows": interval_rows},
@@ -1135,6 +1182,100 @@ def start_of_local_day_utc(now_utc: datetime | None = None) -> datetime:
         second=0,
         microsecond=0,
     ).astimezone(timezone.utc)
+
+
+def load_github_issue_payload() -> dict[str, Any] | None:
+    import requests
+
+    repository = os.environ["EE_DATA_REPOSITORY"].strip()
+    issue_number = int(os.environ.get("EE_DATA_ISSUE_NUMBER", "1"))
+    token = os.environ["EE_DATA_REPO_TOKEN"].strip()
+    response = requests.get(
+        f"https://api.github.com/repos/{repository}/issues/{issue_number}",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+        timeout=180,
+    )
+    response.raise_for_status()
+    body = response.json().get("body")
+    if not isinstance(body, str) or not body.strip():
+        return None
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def delivery_status(payload: dict[str, Any] | None) -> str:
+    if not payload:
+        return ""
+    delivery = payload.get("delivery")
+    if not isinstance(delivery, dict):
+        return ""
+    return str(delivery.get("status") or "").strip().lower()
+
+
+def delivery_remaining_dates(
+    payload: dict[str, Any] | None,
+) -> list[date]:
+    if not payload:
+        return []
+    delivery = payload.get("delivery")
+    if not isinstance(delivery, dict):
+        return []
+    values = delivery.get("remainingDates")
+    if not isinstance(values, list):
+        return []
+    result: list[date] = []
+    for value in values:
+        if isinstance(value, str):
+            try:
+                result.append(date.fromisoformat(value))
+            except ValueError:
+                continue
+    return sorted(set(result))
+
+
+def delivery_cursor_end_utc(
+    payload: dict[str, Any] | None,
+) -> datetime | None:
+    if not payload:
+        return None
+    delivery = payload.get("delivery")
+    if not isinstance(delivery, dict):
+        return None
+    raw_cursor = delivery.get("cursorEndUtc")
+    if not isinstance(raw_cursor, str) or not raw_cursor.strip():
+        return None
+    parsed = datetime.fromisoformat(raw_cursor.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def acknowledged_cursor_utc(
+    payload: dict[str, Any] | None,
+) -> datetime | None:
+    if delivery_status(payload) != "acknowledged":
+        return None
+    delivery = payload.get("delivery")
+    if not isinstance(delivery, dict):
+        return None
+    raw_cursor = delivery.get(
+        "cursorStartUtc"
+        if delivery_remaining_dates(payload)
+        else "cursorEndUtc"
+    )
+    if not isinstance(raw_cursor, str) or not raw_cursor.strip():
+        return None
+    parsed = datetime.fromisoformat(raw_cursor.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def payload_size_chars(payload: dict[str, Any]) -> int:
@@ -1203,17 +1344,43 @@ def main() -> None:
     args = parser.parse_args()
     if args.full_payload and args.payload_date is not None:
         parser.error("--full-payload y --payload-date no pueden combinarse")
+
+    issue_payload: dict[str, Any] | None = None
+    if not args.skip_publish and args.input_json is None:
+        issue_payload = load_github_issue_payload()
+        if delivery_status(issue_payload) == "ready":
+            delivery = issue_payload.get("delivery", {})
+            print(
+                "Hay un lote pendiente de confirmacion en Power Automate; "
+                f"no se consulto Firestore ni se sobrescribio el issue "
+                f"(batch {delivery.get('batchId', 'sin-id')})."
+            )
+            return
+
+    acknowledged_cursor = acknowledged_cursor_utc(issue_payload)
+    queued_dates = delivery_remaining_dates(issue_payload)
+    target_local_date = args.payload_date or (
+        queued_dates[0] if queued_dates else None
+    )
+    remaining_dates = (
+        queued_dates[1:]
+        if args.payload_date is None and queued_dates
+        else []
+    )
+    queued_cursor_end = (
+        delivery_cursor_end_utc(issue_payload) if queued_dates else None
+    )
     changed_since_utc = (
         None
-        if args.full_payload or args.payload_date is not None
-        else start_of_local_day_utc()
+        if args.full_payload or target_local_date is not None
+        else acknowledged_cursor or start_of_local_day_utc()
     )
     readings = (
         load_json_readings(args.input_json)
         if args.input_json
         else load_firestore_readings(
             changed_since_utc=changed_since_utc,
-            target_local_date=args.payload_date,
+            target_local_date=target_local_date,
         )
     )
     if args.output:
@@ -1223,8 +1390,37 @@ def main() -> None:
         payload = build_power_automate_payload(
             readings,
             changed_since_utc=changed_since_utc,
-            target_local_date=args.payload_date,
+            target_local_date=target_local_date,
+            cursor_start_utc=acknowledged_cursor,
+            cursor_end_utc=queued_cursor_end,
+            remaining_dates=remaining_dates,
         )
+        if not payload["datasets"]["raw"]["rows"]:
+            print(
+                "No hay lecturas nuevas para publicar; "
+                "el issue privado se mantuvo sin cambios."
+            )
+            return
+        max_chars = int(os.environ.get("EE_DATA_ISSUE_MAX_CHARS", "60000"))
+        if payload_size_chars(payload) > max_chars and target_local_date is None:
+            affected_dates = [
+                date.fromisoformat(value)
+                for value in payload.get("affectedDates", [])
+            ]
+            if len(affected_dates) > 1:
+                first_date = affected_dates[0]
+                payload = build_power_automate_payload(
+                    readings,
+                    target_local_date=first_date,
+                    cursor_start_utc=acknowledged_cursor,
+                    cursor_end_utc=delivery_cursor_end_utc(payload),
+                    remaining_dates=affected_dates[1:],
+                )
+                print(
+                    "El lote incremental se dividio automaticamente por fecha; "
+                    f"se publica {first_date.isoformat()} y quedan "
+                    f"{len(affected_dates) - 1} fecha(s) en cola."
+                )
         publish_payload_to_github_issue(payload)
         print(
             "Payload publicado en el issue privado de GitHub "

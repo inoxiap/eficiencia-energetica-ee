@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 class AppUpdateNotice {
@@ -71,25 +72,37 @@ class AppUpdateService {
         return null;
       }
 
+      final platformPrefix = kIsWeb ? 'web' : 'android';
       final latestBuildNumber =
-          _toInt(data['latestBuildNumber']) ?? currentBuildNumber;
+          _toInt(data['${platformPrefix}LatestBuildNumber']) ??
+          _toInt(data['latestBuildNumber']) ??
+          currentBuildNumber;
       if (latestBuildNumber <= currentBuildNumber) {
         return null;
       }
 
-      final minSupportedBuildNumber = _toInt(data['minSupportedBuildNumber']);
-      final updateUrl = (data['updateUrl'] as String? ?? '').trim();
+      final minSupportedBuildNumber =
+          _toInt(data['${platformPrefix}MinSupportedBuildNumber']) ??
+          _toInt(data['minSupportedBuildNumber']);
+      final updateUrl = _firstString(
+        data['${platformPrefix}UpdateUrl'],
+        data['updateUrl'],
+      );
       return AppUpdateNotice(
         currentVersion: '${packageInfo.version}+${packageInfo.buildNumber}',
         currentBuildNumber: currentBuildNumber,
-        latestVersion:
-            (data['latestVersion'] as String? ?? latestBuildNumber.toString())
-                .trim(),
+        latestVersion: _firstString(
+          data['${platformPrefix}LatestVersion'],
+          data['latestVersion'],
+          fallback: latestBuildNumber.toString(),
+        ),
         latestBuildNumber: latestBuildNumber,
-        message:
-            (data['message'] as String? ??
-                    'Hay una nueva version disponible de Eficiencia Energetica EE.')
-                .trim(),
+        message: _firstString(
+          data['${platformPrefix}Message'],
+          data['message'],
+          fallback:
+              'Hay una nueva version disponible de Eficiencia Energetica EE.',
+        ),
         updateUrl: updateUrl,
         forceUpdate:
             data['forceUpdate'] == true ||
@@ -112,5 +125,18 @@ class AppUpdateService {
       return int.tryParse(value);
     }
     return null;
+  }
+
+  static String _firstString(
+    Object? primary,
+    Object? fallbackValue, {
+    String fallback = '',
+  }) {
+    for (final value in [primary, fallbackValue]) {
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+    }
+    return fallback;
   }
 }

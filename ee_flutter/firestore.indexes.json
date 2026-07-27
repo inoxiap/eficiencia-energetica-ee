@@ -1,0 +1,86 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "motor_reference_tables",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "powerHp", "order": "ASCENDING"},
+        {"fieldPath": "active", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "steam_trap_sizing_reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "sectionId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "steam_trap_sizing_reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "applicationTypeId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "bare_pipe_reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "sectionId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "leak_reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "sectionId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "leak_reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "leakType", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "boiler_consumption_readings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "boilerId", "order": "ASCENDING"},
+        {"fieldPath": "recordedAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "boiler_consumption_readings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "createdByUid", "order": "ASCENDING"},
+        {"fieldPath": "recordedAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "pump_energy_surveys",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "sectionId", "order": "ASCENDING"},
+        {"fieldPath": "surveyType", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "pump_energy_surveys",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "assetId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
