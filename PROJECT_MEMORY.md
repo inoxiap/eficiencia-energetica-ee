@@ -767,6 +767,22 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   para despues del reinicio de cuota de Firestore. No eliminar el heartbeat
   `recuperar-26-lecturas-de-calderas` hasta comprobar los datos en Excel.
 
+### 2026-07-27 - Confirmacion del bloqueo de las 26 lecturas
+
+- Consulta: Jeff confirmo que las 26 lecturas de Pablo todavia no aparecen en
+  el Excel maestro.
+- Diagnostico: el workflow privado `#38`, ejecutado a las 13:46 de Ecuador,
+  aprobo sus pruebas pero fallo al consultar Firestore con
+  `429 RESOURCE_EXHAUSTED: Quota exceeded`. El issue privado permanece en
+  esquema 2, modo `acknowledgement`, estado `acknowledged` y cero filas; por
+  eso Power Automate no tenia un lote nuevo que escribir.
+- Recuperacion: el heartbeat `recuperar-26-lecturas-de-calderas` esta activo a
+  las 02:10 de America/Guayaquil. Su primera oportunidad util sera el
+  2026-07-28, despues del reinicio aproximado de cuota a las 02:00.
+- Datos: no hay indicios de perdida ni de rechazo de Excel. Las 26 lecturas
+  permanecen pendientes de ser leidas desde Firestore y transportadas por
+  fechas.
+
 ## Plantilla para futuras entradas
 
 ```markdown
