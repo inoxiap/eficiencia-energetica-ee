@@ -833,6 +833,16 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   horarias y 12 resumenes diarios, sin saltos cronologicos. Las cuatro hojas
   conservaron exactamente las mismas filas antes y despues. El libro mantuvo
   sus 15 hojas y 58.505 celdas con formulas.
+- Ajuste adicional: se ordeno exclusivamente el bloque de la aplicacion en
+  `Regist_inform!A6488:S6499`, correspondiente a las 12 filas del 24 al 28 de
+  julio de 2026. La fila 6487 y toda la historia anterior permanecieron
+  intactas. Dentro de cada fecha se aplico un orden estable por caldera.
+- Respaldo del segundo ajuste:
+  `C:\Users\windo\OneDrive - Grupo Danec\MEJORAS\1. SEGUIMIENTO DE LA ENERGÍA\Respaldos Codex\REPORTE DE CALDERAS 2018 - respaldo antes de ordenar Regist_inform 2026-07-28.xlsx`.
+- Verificacion de `Regist_inform`: se conservaron los mismos 12 registros,
+  las formulas de cada fila continuan apuntando a su propia fila, los nombres
+  de los dias se muestran en espanol y el libro sigue conteniendo 15 hojas y
+  58.505 celdas con formulas.
 - Compatibilidad: no se alteraron IDs ni claves de sincronizacion. Las cargas
   posteriores pueden continuar actualizando por `documentId` y `syncKey`.
 
