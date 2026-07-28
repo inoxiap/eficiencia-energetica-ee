@@ -276,12 +276,18 @@ class BoilerReading {
         json['boilerName'] as String? ??
         '';
     final boiler = boilerByName(boilerName);
+    final boilerId = json['boilerId'] as String? ?? boiler?.id ?? '';
+    final storedSteamUnit =
+        json['steamUnit'] as String? ?? boiler?.steamUnit ?? pendingUnit;
+    final steamUnit = boilerId == 'alfa_laval_1200' && storedSteamUnit == 'gal'
+        ? 'kg'
+        : storedSteamUnit;
     return BoilerReading(
       id: json['id'] as String? ?? '',
       recordedAt: recorded ?? DateTime.now(),
       createdAt: created ?? recorded ?? DateTime.now(),
       boilerName: boilerName,
-      boilerId: json['boilerId'] as String? ?? boiler?.id ?? '',
+      boilerId: boilerId,
       readingMode: json['readingMode'] as String? ?? 'cumulative_meter',
       fuelTotal: _toDouble(json['bunkerValue'] ?? json['fuelTotal']),
       waterTotal: _toDouble(json['waterValue'] ?? json['waterTotal']),
@@ -291,8 +297,7 @@ class BoilerReading {
           json['waterUnit'] as String? ?? boiler?.waterUnit ?? pendingUnit,
       bunkerUnit:
           json['bunkerUnit'] as String? ?? boiler?.bunkerUnit ?? pendingUnit,
-      steamUnit:
-          json['steamUnit'] as String? ?? boiler?.steamUnit ?? pendingUnit,
+      steamUnit: steamUnit,
       boilerPressurePsi: _toDoubleOrNull(json['boilerPressurePsi']),
       boilerPressureUnit:
           json['boilerPressureUnit'] as String? ?? defaultBoilerPressureUnit,

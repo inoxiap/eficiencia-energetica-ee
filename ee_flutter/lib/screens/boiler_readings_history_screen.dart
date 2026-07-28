@@ -271,7 +271,9 @@ class _ReadingsTable extends StatelessWidget {
       if (value != null) {
         return _valueWithUnit(
           value,
-          _friendlyUnit('${original['unit'] ?? ''}'),
+          key == 'steam'
+              ? _friendlyUnit(reading.steamUnit)
+              : _friendlyUnit('${original['unit'] ?? ''}'),
           compact,
         );
       }

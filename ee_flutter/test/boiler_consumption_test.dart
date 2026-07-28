@@ -233,11 +233,31 @@ void main() {
 
   test('current configuration preserves steam behavior for compatibility', () {
     expect(boilerByName(alfaLavalBoiler)?.readsSteam, isTrue);
+    expect(boilerByName(alfaLavalBoiler)?.steamUnit, 'kg');
     expect(
       boilerById('cleaver_brooks_1200')?.readsSteam,
       isFalse,
       reason: 'Pending plant confirmation; do not change silently.',
     );
+  });
+
+  test('historical Alfa steam readings are interpreted as kilograms', () {
+    final historical = BoilerReading.fromJson({
+      'id': 'alfa-steam-legacy',
+      'boilerId': 'alfa_laval_1200',
+      'boilerName': alfaLavalBoiler,
+      'recordedAt': '2026-07-27T17:00:00-05:00',
+      'createdAt': '2026-07-27T17:00:00-05:00',
+      'bunkerValue': 100,
+      'waterValue': 200,
+      'steamValue': 300,
+      'bunkerUnit': 'gal',
+      'waterUnit': 'gal',
+      'steamUnit': 'gal',
+    });
+
+    expect(historical.steamTotal, 300);
+    expect(historical.steamUnit, 'kg');
   });
 
   test('local legacy PIN is removed during the first read', () async {
