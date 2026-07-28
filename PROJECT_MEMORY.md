@@ -814,6 +814,28 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   `recuperar-26-lecturas-de-calderas`, ya que la recuperacion y comprobacion
   concluyeron.
 
+### 2026-07-28 - Orden cronologico del Excel maestro
+
+- Solicitud: ordenar localmente la informacion recuperada sin modificar la
+  logica de Firestore, GitHub, Power Automate ni las cargas posteriores.
+- Archivo actualizado:
+  `C:\Users\windo\OneDrive - Grupo Danec\MEJORAS\1. SEGUIMIENTO DE LA ENERGÍA\REPORTE DE CALDERAS 2018.xlsx`.
+- Respaldo previo:
+  `C:\Users\windo\OneDrive - Grupo Danec\MEJORAS\1. SEGUIMIENTO DE LA ENERGÍA\Respaldos Codex\REPORTE DE CALDERAS 2018 - respaldo antes de ordenar 2026-07-28.xlsx`.
+- Hojas ordenadas por fecha y hora ascendente, con claves secundarias estables:
+  `App_Datos_Firestore`, `App_Intervalos`, `App_Consumo_Horario` y
+  `App_Resumen_Diario`.
+- Se conservaron sin cambios `Regist_inform`, `App_Mapeo_Regist`,
+  `App_Control` y las demas hojas del libro. El ordenamiento se ejecuto con el
+  motor nativo de Excel para preservar fechas ISO, formatos, vinculos,
+  formulas y objetos.
+- Verificacion: quedaron 68 filas crudas, 68 intervalos, 212 asignaciones
+  horarias y 12 resumenes diarios, sin saltos cronologicos. Las cuatro hojas
+  conservaron exactamente las mismas filas antes y despues. El libro mantuvo
+  sus 15 hojas y 58.505 celdas con formulas.
+- Compatibilidad: no se alteraron IDs ni claves de sincronizacion. Las cargas
+  posteriores pueden continuar actualizando por `documentId` y `syncKey`.
+
 ## Plantilla para futuras entradas
 
 ```markdown
