@@ -46,6 +46,7 @@ import 'widgets/home_navigation_bar.dart';
 
 part 'screens/leak_report_screen.dart';
 part 'screens/maintenance_history_screen.dart';
+part 'screens/boiler_readings_history_screen.dart';
 part 'screens/pressure_entry_tab.dart';
 part 'screens/input_controls_playground_screen.dart';
 
@@ -438,20 +439,74 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 18),
         Text('Modulos', style: Theme.of(context).textTheme.titleMediumBold),
         const SizedBox(height: 10),
-        EeActionButton(
-          icon: Icons.local_fire_department_outlined,
-          label: 'Ingresar consumos',
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => ConsumptionEntryScreen(
-                  consumptionStore: widget.consumptionStore,
-                  pressureReadingStore: widget.pressureReadingStore,
-                  operatorSession: widget.operatorSession,
+        Row(
+          children: [
+            Expanded(
+              flex: 4,
+              child: EeActionButton(
+                icon: Icons.local_fire_department_outlined,
+                label: 'Ingresar consumos',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ConsumptionEntryScreen(
+                        consumptionStore: widget.consumptionStore,
+                        pressureReadingStore: widget.pressureReadingStore,
+                        operatorSession: widget.operatorSession,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 52,
+                child: FilledButton(
+                  key: const Key('boiler-readings-history-button'),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => BoilerReadingsHistoryScreen(
+                          consumptionStore: widget.consumptionStore,
+                        ),
+                      ),
+                    );
+                  },
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 3,
+                      vertical: 5,
+                    ),
+                    backgroundColor: brandRed,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.history, size: 20),
+                      SizedBox(height: 2),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Registros',
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            );
-          },
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         EeActionButton(
@@ -2008,7 +2063,7 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
   int _fuelInputValue = 0;
   int _waterInputValue = 0;
   int _steamInputValue = 0;
-  Map<String, BoilerReading> _latestReadingByBoiler = {};
+  Map<String, BoilerReading> _latestReadingByBoilerId = {};
   bool _isLoadingPreviousReadings = true;
   bool _pressureInBar = false;
   ConsumptionEntryTab _selectedTab = ConsumptionEntryTab.consumption;
@@ -2033,18 +2088,15 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
         });
       final latest = <String, BoilerReading>{};
       for (final reading in sorted) {
-        final name =
-            boilerById(reading.effectiveBoilerId)?.displayName ??
-            reading.boilerName;
-        latest.putIfAbsent(name, () => reading);
+        latest.putIfAbsent(reading.effectiveBoilerId, () => reading);
       }
       final pendingCount = readings
           .where((reading) => reading.status == 'pending_sync')
           .length;
       setState(() {
-        _latestReadingByBoiler = latest;
+        _latestReadingByBoilerId = latest;
         _isLoadingPreviousReadings = false;
-        _applyPreviousReading(latest[_boilerName]);
+        _applyPreviousReading(latest[boilerByName(_boilerName)!.id]);
       });
       if (pendingCount > 0) {
         _setMessage(
@@ -2229,9 +2281,9 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
                     const SizedBox(height: 14),
                     _buildConsumptionOdometer(
                       label: 'Lectura acumulada de vapor',
-                      helper: 'Lectura acumulada del medidor en galones.',
+                      helper: 'Lectura acumulada del medidor en kilogramos.',
                       value: _steamInputValue,
-                      unit: 'gal',
+                      unit: 'kg',
                       keyPrefix: 'consumption-steam',
                       onChanged: (value) =>
                           setState(() => _steamInputValue = value),
@@ -2315,7 +2367,7 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
     setState(() {
       _boilerName = value;
       _boilerPressurePsi = _defaultPressurePsi(value);
-      _applyPreviousReading(_latestReadingByBoiler[value]);
+      _applyPreviousReading(_latestReadingByBoilerId[boilerByName(value)!.id]);
     });
   }
 
@@ -2459,7 +2511,7 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
           'gallonsPerCounterUnit': alfaWaterGallonsPerCounterUnit,
       },
       if (boiler.readsSteam)
-        'steam': {'value': steamTotal, 'unit': 'gal', 'gallons': steamTotal},
+        'steam': {'value': steamTotal, 'unit': 'kg', 'kilograms': steamTotal},
     };
 
     final now = DateTime.now().toUtc();
@@ -2757,9 +2809,9 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
       _isSubmitting = false;
       _boilerPressurePsi = _defaultPressurePsi(_boilerName);
       _notesController.clear();
-      _latestReadingByBoiler = {
-        ..._latestReadingByBoiler,
-        _boilerName: reading,
+      _latestReadingByBoilerId = {
+        ..._latestReadingByBoilerId,
+        reading.effectiveBoilerId: reading,
       };
       _applyPreviousReading(reading);
       _messageType = type;

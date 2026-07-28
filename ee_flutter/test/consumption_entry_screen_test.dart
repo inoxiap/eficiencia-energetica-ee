@@ -53,6 +53,20 @@ class _PreviousConsumptionStore implements ConsumptionStore {
         waterConsumption: null,
         steamConsumption: null,
       ),
+      BoilerReading(
+        id: 'cleaver-previous',
+        recordedAt: now.subtract(const Duration(minutes: 10)),
+        createdAt: now.subtract(const Duration(minutes: 10)),
+        boilerName: 'Nombre historico Cleaver',
+        boilerId: 'cleaver_brooks_1200',
+        fuelTotal: 4200,
+        waterTotal: 5100,
+        steamTotal: null,
+        boilerPressurePsi: 116,
+        fuelConsumption: null,
+        waterConsumption: null,
+        steamConsumption: null,
+      ),
     ];
   }
 
@@ -90,7 +104,19 @@ void main() {
     expect(find.text('Consumo del intervalo'), findsNothing);
     expect(find.text('0000003790 L'), findsOneWidget);
     expect(find.text('0000000800 x10 L'), findsOneWidget);
-    expect(find.text('0000003000 gal'), findsOneWidget);
+    expect(find.text('0000003000 kg'), findsOneWidget);
+
+    final boilerPicker = tester.widget<EmbeddedWheelPicker<String>>(
+      find.byType(EmbeddedWheelPicker<String>).first,
+    );
+    boilerPicker.onSelected('Caldera Cleaver Brooks 1200');
+    await tester.pumpAndSettle();
+    expect(find.text('0000004200 gal'), findsOneWidget);
+    expect(find.text('0000005100 gal'), findsOneWidget);
+    expect(find.text('Lectura acumulada de vapor'), findsNothing);
+
+    boilerPicker.onSelected(alfaLavalBoiler);
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('bar'));
     await tester.pumpAndSettle();
@@ -172,9 +198,14 @@ void main() {
     expect(consumptionStore.savedReading, isNotNull);
     expect(consumptionStore.savedReading!.fuelTotal, closeTo(1000, 0.0001));
     expect(consumptionStore.savedReading!.waterTotal, closeTo(2112, 0.0001));
+    expect(consumptionStore.savedReading!.steamUnit, 'kg');
     expect(
       consumptionStore.savedReading!.originalInputs['water']['unit'],
       'counter_x10_L',
+    );
+    expect(
+      consumptionStore.savedReading!.originalInputs['steam']['unit'],
+      'kg',
     );
   });
 }

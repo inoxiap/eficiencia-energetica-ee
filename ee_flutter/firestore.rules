@@ -203,7 +203,7 @@ service cloud.firestore {
           )
         )
         && !request.resource.data.keys().hasAny(['operatorPin']);
-      allow read: if isAdmin() || readsOwnRecord();
+      allow read: if signedIn();
       allow update, delete: if false;
     }
 

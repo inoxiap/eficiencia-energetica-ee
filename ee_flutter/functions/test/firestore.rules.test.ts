@@ -282,6 +282,33 @@ describe("Firestore rules", () => {
     );
   });
 
+  it("allows signed-in users to read shared boiler readings", async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(
+          context.firestore(),
+          "boiler_consumption_readings/alfa_laval_1200_2026072415",
+        ),
+        {
+          ...boilerReading("operator-1"),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      );
+    });
+    const anotherOperator = environment
+      .authenticatedContext("operator-2", {role: "operator"})
+      .firestore();
+    await assertSucceeds(
+      getDoc(
+        doc(
+          anotherOperator,
+          "boiler_consumption_readings/alfa_laval_1200_2026072415",
+        ),
+      ),
+    );
+  });
+
   it("allows admin reads but denies client deletion", async () => {
     await environment.withSecurityRulesDisabled(async (context) => {
       await setDoc(

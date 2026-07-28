@@ -143,7 +143,8 @@ Nuevo:
     validationWarnings
     coverageStatus: complete | partial | missing
 
-Las unidades nuevas de agua, bunker y vapor son `gal`.
+Las unidades normalizadas de agua y bunker son `gal`. El vapor de Alfa Laval
+se registra en `kg`; Distral 900 y Cleaver Brooks no solicitan vapor.
 Desde `schemaVersion: 2`, cada lectura nueva incluye la presion de la caldera
 en PSI. Las reglas aceptan documentos historicos de esquema 1 sin presion para
 mantener compatibilidad, pero exigen un valor numerico no negativo en esquema 2.

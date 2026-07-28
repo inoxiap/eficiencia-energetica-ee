@@ -2,6 +2,21 @@
 
 Fecha: 2026-07-15
 
+## Actualizacion 2026-07-28 - Version 1.3.0
+
+- La precarga del hodometro usa el `boilerId` estable y ya no depende del
+  nombre visible de la caldera.
+- Los usuarios autenticados pueden consultar el historial operativo compartido
+  de consumos; las escrituras siguen ligadas al usuario y no se permite
+  actualizar ni borrar lecturas desde el cliente.
+- El vapor de Alfa Laval se captura y almacena en kilogramos (`kg`).
+- Se agrego `Registros` junto a `Ingresar consumos`, con vistas independientes
+  para Alfa Laval, Distral 900 y Cleaver Brooks y carga progresiva de 15 filas.
+- Verificacion: `flutter analyze` sin hallazgos, 46 pruebas Flutter y 10 pruebas
+  de reglas aprobadas, build web y APK release `1.3.0+7` correctos.
+- Produccion: Hosting y reglas Firestore desplegados en
+  `https://eficiencia-energetica-ee.web.app`.
+
 ## Actualizacion 2026-07-24
 
 - Se agrego presion obligatoria de caldera en PSI a cada lectura acumulada.
@@ -47,8 +62,9 @@ Fecha: 2026-07-15
 - Nueva vista de fugas en el panel administrador Flutter.
 - Fugas agregadas al dashboard FastAPI, filtros, KPIs, graficos, tabla y CSV.
 - Login del dashboard alineado con Firebase Auth y rol Firestore.
-- Unidades de consumos visibles y almacenadas como galones (`gal`).
-- Version Android/web 1.1.1+4.
+- Bunker y agua normalizados en galones (`gal`); vapor de Alfa Laval en
+  kilogramos (`kg`).
+- Version Android/web 1.3.0+7.
 
 ## Existia y se conservo
 

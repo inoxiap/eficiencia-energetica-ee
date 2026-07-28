@@ -31,11 +31,7 @@ class FirestoreConsumptionStore implements ConsumptionStore {
         'Inicia sesion como usuario antes de consultar lecturas.',
       );
     }
-    Query<Map<String, dynamic>> query = _readings;
-    if (operator.role != 'admin') {
-      query = query.where('createdByUid', isEqualTo: operator.uid);
-    }
-    final snapshot = await query
+    final snapshot = await _readings
         .orderBy('recordedAt', descending: true)
         .limit(recentReadingLimit)
         .get();

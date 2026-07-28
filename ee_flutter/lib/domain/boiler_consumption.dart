@@ -63,6 +63,7 @@ const boilerDefinitions = <BoilerDefinition>[
     id: 'alfa_laval_1200',
     displayName: 'Caldera Alfa Laval 1200',
     readsSteam: true,
+    steamUnit: 'kg',
   ),
   BoilerDefinition(
     id: 'distral_900',

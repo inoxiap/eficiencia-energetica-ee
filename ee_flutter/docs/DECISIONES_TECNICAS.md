@@ -53,9 +53,10 @@ habilitado unicamente para Alfa Laval por decision de planta. Distral 900 y
 Cleaver Brooks conservan el campo de vapor deshabilitado. Caldera 1100 no se
 invento.
 
-Las unidades de agua, bunker y vapor se guardan en galones (`gal`).
-Todas las lecturas nuevas se crean como `cumulative_meter`. El soporte para
-`interval_consumption` permanece solo al leer documentos historicos.
+Las unidades de agua y bunker se normalizan en galones (`gal`). El vapor de
+Alfa Laval se guarda en kilogramos (`kg`). Todas las lecturas nuevas se crean
+como `cumulative_meter`. El soporte para `interval_consumption` permanece solo
+al leer documentos historicos.
 
 ## Presiones de distribuidores
 

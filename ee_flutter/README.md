@@ -102,12 +102,13 @@ No guardar la cuenta de servicio ni los secretos en el repositorio.
 - Confirmar si existe Caldera 1100 y su ID.
 - Confirmar rangos operativos de advertencia.
 
-Las lecturas nuevas de agua, bunker y vapor se guardan en galones (`gal`).
-Todas se registran como lecturas acumuladas. Solo Alfa Laval solicita vapor;
-Distral 900 y Cleaver Brooks lo mantienen deshabilitado. Las presiones se
-guardan en PSI. La presion de cada caldera se guarda con su lectura acumulada
-en `boiler_consumption_readings`; las presiones de distribuidores se guardan
-en `steam_pressure_readings`.
+Las lecturas nuevas de agua y bunker se normalizan en galones (`gal`) para los
+calculos y la integracion con Excel. El vapor de Alfa Laval se registra en
+kilogramos (`kg`). Todas son lecturas acumuladas. Distral 900 y Cleaver Brooks
+mantienen vapor deshabilitado. Las presiones se guardan en PSI. La presion de
+cada caldera se guarda con su lectura acumulada en
+`boiler_consumption_readings`; las presiones de distribuidores se guardan en
+`steam_pressure_readings`.
 
 ## Excel de consumos de calderas
 

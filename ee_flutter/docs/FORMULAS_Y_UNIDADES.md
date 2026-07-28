@@ -47,13 +47,15 @@ contadores:
   `gal = litros / 3.79`.
 - Agua: unidades del contador, donde cada unidad representa 10 litros. El valor
   normalizado se guarda como `gal = unidades x 2.64`.
-- Vapor: galones.
+- Vapor: kilogramos (`kg`), sin conversion adicional.
 
 La equivalencia fisica exacta es 1 galon estadounidense =
 3.785411784 litros; por eso 10 litros equivalen a 2.64172 galones. La app usa
 los factores operativos redondeados 3.79 y 2.64 confirmados para los medidores
 de planta. Guarda tanto el valor original y su unidad como el valor normalizado
-en galones. Distral 900 y Cleaver Brooks mantienen sus lecturas en galones.
+de bunker y agua en galones. El vapor conserva el valor acumulado original en
+kilogramos. Distral 900 y Cleaver Brooks mantienen sus lecturas habilitadas en
+galones y no solicitan vapor.
 
 ### Advertencias de rango historico
 
@@ -85,9 +87,9 @@ entre horas cerradas segun el tiempo de solapamiento:
 
 La suma de las asignaciones horarias conserva exactamente el delta original.
 Los totales diarios se forman con esas asignaciones para dividir correctamente
-un intervalo que cruce la medianoche. Solo se procesan registros
-`cumulative_meter` con unidades `gal`; las otras unidades se conservan en datos
-crudos y quedan advertidas.
+un intervalo que cruce la medianoche. Los deltas de bunker y agua solo se
+procesan en registros `cumulative_meter` normalizados a `gal`. El vapor se
+conserva en `kg` dentro de los datos crudos.
 
 El resumen compatible con `Regist_inform` usa provisionalmente:
 

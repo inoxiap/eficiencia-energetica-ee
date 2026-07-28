@@ -25,6 +25,7 @@ void main() {
     expect(find.text('Dimensionamiento de trampas'), findsOneWidget);
     expect(find.text('Reporte de tuberia desnuda'), findsOneWidget);
     expect(find.text('Ingresar consumos'), findsOneWidget);
+    expect(find.text('Registros'), findsOneWidget);
     expect(find.text('Panel administrador'), findsOneWidget);
 
     final moduleLabels = tester
