@@ -60,6 +60,14 @@
       "collectionGroup": "boiler_consumption_readings",
       "queryScope": "COLLECTION",
       "fields": [
+        {"fieldPath": "boilerId", "order": "ASCENDING"},
+        {"fieldPath": "recordedAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "boiler_consumption_readings",
+      "queryScope": "COLLECTION",
+      "fields": [
         {"fieldPath": "createdByUid", "order": "ASCENDING"},
         {"fieldPath": "recordedAt", "order": "DESCENDING"}
       ]

@@ -783,6 +783,37 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   permanecen pendientes de ser leidas desde Firestore y transportadas por
   fechas.
 
+### 2026-07-28 - Recuperacion completa de lecturas retenidas
+
+- Solicitud: recuperar las 26 lecturas identificadas inicialmente y comprobar
+  si se acumularon otras durante el agotamiento de cuota de Firestore.
+- Causa corregida: despues del reinicio de cuota, GitHub Actions revelo un
+  segundo bloqueo: faltaba el indice compuesto ascendente
+  `boilerId ASC + recordedAt ASC` requerido por el exportador. Se agrego a
+  `ee_flutter/firestore.indexes.json`, se desplego en produccion y Firestore
+  confirmo el estado `READY`.
+- Auditoria final: se localizaron 63 lecturas reales desde el 2026-07-24, no
+  solamente 26. El desglose por fecha local fue 6 el 24, 7 el 25, 16 el 26,
+  28 el 27 y 6 el 28. Por usuario fueron 33 de Pablo Loachamin y 30 de los
+  demas usuarios. Todas conservaron el estado `synced`.
+- Recuperacion: se reprocesaron de forma idempotente los cinco dias mediante
+  GitHub Actions y Power Automate. Las ejecuciones exitosas fueron
+  `30361657978`, `30361904120`, `30362057292`, `30362196209` y
+  `30362327230`, con lotes de 6, 7, 16, 28 y 6 filas respectivamente.
+- Verificacion del transporte: despues de cada fecha, Power Automate actualizo
+  el issue privado a `acknowledged`. El lote final quedo confirmado para
+  2026-07-28 con 6 filas y sin fechas restantes.
+- Verificacion del Excel maestro: `App_Control` mostro `Completado` para el
+  ultimo lote, 6 filas crudas nuevas, 0 actualizadas, 0 conflictos historicos
+  y 0 filas omitidas. Firestore se volvio a consultar al terminar y el conteo
+  permanecio estable en 63, por lo que no quedaron lecturas adicionales sin
+  procesar dentro del periodo afectado.
+- Datos: no se borraron registros reales de Firestore. El reproceso usa el ID
+  del documento y no duplica filas ya existentes en Excel.
+- Automatizacion: se elimino el heartbeat temporal
+  `recuperar-26-lecturas-de-calderas`, ya que la recuperacion y comprobacion
+  concluyeron.
+
 ## Plantilla para futuras entradas
 
 ```markdown
