@@ -12,7 +12,7 @@ Fecha: 2026-07-15
 - El vapor de Alfa Laval se captura y almacena en kilogramos (`kg`).
 - Se agrego `Registros` junto a `Ingresar consumos`, con vistas independientes
   para Alfa Laval, Distral 900 y Cleaver Brooks y carga progresiva de 15 filas.
-- Verificacion: `flutter analyze` sin hallazgos, 46 pruebas Flutter y 10 pruebas
+- Verificacion: `flutter analyze` sin hallazgos, 47 pruebas Flutter y 10 pruebas
   de reglas aprobadas, build web y APK release `1.3.0+7` correctos.
 - Produccion: Hosting y reglas Firestore desplegados en
   `https://eficiencia-energetica-ee.web.app`.

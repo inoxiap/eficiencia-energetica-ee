@@ -846,6 +846,39 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
 - Compatibilidad: no se alteraron IDs ni claves de sincronizacion. Las cargas
   posteriores pueden continuar actualizando por `documentId` y `syncKey`.
 
+### 2026-07-28 - Precarga Cleaver, vapor en kg e historial 1.3.0
+
+- Solicitud: corregir la precarga del hodometro de Cleaver Brooks, definir la
+  lectura de vapor en kilogramos y agregar un historial de consumos separado
+  por caldera.
+- Causa de Cleaver: la pantalla asociaba la ultima lectura al nombre visible y
+  Firestore limitaba a cada usuario a sus propios documentos. La precarga ahora
+  usa el `boilerId` estable y las lecturas operativas son visibles para todo
+  usuario autenticado. Crear sigue exigiendo `createdByUid` propio y el cliente
+  no puede actualizar ni borrar lecturas.
+- Vapor: Alfa Laval captura y guarda las nuevas lecturas acumuladas en `kg`.
+  Los documentos historicos de Alfa etiquetados como `gal` se interpretan como
+  `kg` sin modificar el valor ni reescribir los documentos existentes.
+- Interfaz: se agrego el boton `Registros` junto a `Ingresar consumos`. La nueva
+  pantalla separa Alfa Laval, Distral 900 y Cleaver Brooks en la navegacion
+  inferior, muestra fecha/hora, bunker, agua y vapor, inicia con 15 filas y
+  permite cargar 15 mas. En telefono las cuatro columnas caben en pantalla.
+- Prueba productiva: una sesion autenticada cargo 19 lecturas de Alfa Laval en
+  el historial. Al seleccionar Cleaver Brooks en `Ingresar consumos`, bunker y
+  agua recuperaron valores acumulados reales distintos de cero. No hubo errores
+  de consola ni escrituras durante estas comprobaciones.
+- Seguridad: `boiler_consumption_readings` permite lectura a usuarios
+  autenticados; las reglas de creacion, inmutabilidad y ausencia de PIN se
+  conservaron. Se agrego una prueba especifica de lectura compartida.
+- Version y publicacion: Flutter `1.3.0+7`. Web y reglas desplegadas en
+  `https://eficiencia-energetica-ee.web.app`. APK firmado de 56.194.394 bytes:
+  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/download/v1.3.0/eficiencia-energetica-ee-1.3.0-build7.apk`.
+  `app_config/mobile_app` anuncia build 7 con actualizacion no forzada.
+- Pruebas/builds: `flutter analyze` sin hallazgos, 47 pruebas Flutter y 10
+  pruebas de reglas aprobadas; builds release web y Android correctos.
+- Commits principales: `378108a`, `c5933f5` y `e1632ca`.
+- Pendientes: ninguno para esta solicitud.
+
 ## Plantilla para futuras entradas
 
 ```markdown
