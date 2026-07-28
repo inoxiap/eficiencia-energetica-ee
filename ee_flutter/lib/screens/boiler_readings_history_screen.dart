@@ -194,6 +194,7 @@ class _ReadingsTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 520;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
@@ -201,10 +202,17 @@ class _ReadingsTable extends StatelessWidget {
         headingRowColor: WidgetStatePropertyAll(
           brandRed.withValues(alpha: 0.08),
         ),
-        horizontalMargin: 10,
-        columnSpacing: 18,
-        columns: const [
-          DataColumn(label: Text('Fecha y hora')),
+        horizontalMargin: compact ? 4 : 10,
+        columnSpacing: compact ? 8 : 18,
+        dataRowMinHeight: compact ? 52 : 48,
+        dataRowMaxHeight: compact ? 58 : 56,
+        columns: [
+          DataColumn(
+            label: Text(
+              compact ? 'Fecha\ny hora' : 'Fecha y hora',
+              textAlign: TextAlign.center,
+            ),
+          ),
           DataColumn(label: Text('Bunker'), numeric: true),
           DataColumn(label: Text('Agua'), numeric: true),
           DataColumn(label: Text('Vapor'), numeric: true),
@@ -213,14 +221,36 @@ class _ReadingsTable extends StatelessWidget {
           for (final reading in readings)
             DataRow(
               cells: [
-                DataCell(Text(Formats.date(reading.recordedAt))),
-                DataCell(Text(_originalValue(reading, 'bunker'))),
-                DataCell(Text(_originalValue(reading, 'water'))),
+                DataCell(
+                  Text(
+                    compact
+                        ? _compactDate(reading.recordedAt)
+                        : Formats.date(reading.recordedAt),
+                    textAlign: TextAlign.center,
+                    style: compact ? const TextStyle(fontSize: 12) : null,
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    _originalValue(reading, 'bunker', compact: compact),
+                    textAlign: TextAlign.center,
+                    style: compact ? const TextStyle(fontSize: 12) : null,
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    _originalValue(reading, 'water', compact: compact),
+                    textAlign: TextAlign.center,
+                    style: compact ? const TextStyle(fontSize: 12) : null,
+                  ),
+                ),
                 DataCell(
                   Text(
                     reading.steamTotal == null
                         ? '-'
-                        : _originalValue(reading, 'steam'),
+                        : _originalValue(reading, 'steam', compact: compact),
+                    textAlign: TextAlign.center,
+                    style: compact ? const TextStyle(fontSize: 12) : null,
                   ),
                 ),
               ],
@@ -230,23 +260,54 @@ class _ReadingsTable extends StatelessWidget {
     );
   }
 
-  static String _originalValue(BoilerReading reading, String key) {
+  static String _originalValue(
+    BoilerReading reading,
+    String key, {
+    required bool compact,
+  }) {
     final original = reading.originalInputs[key];
     if (original is Map) {
       final value = _toDouble(original['value']);
       if (value != null) {
-        return '${_formatNumber(value)} ${_friendlyUnit('${original['unit'] ?? ''}')}';
+        return _valueWithUnit(
+          value,
+          _friendlyUnit('${original['unit'] ?? ''}'),
+          compact,
+        );
       }
     }
     return switch (key) {
-      'bunker' =>
-        '${_formatNumber(reading.fuelTotal)} ${_friendlyUnit(reading.bunkerUnit)}',
-      'water' =>
-        '${_formatNumber(reading.waterTotal)} ${_friendlyUnit(reading.waterUnit)}',
-      'steam' =>
-        '${_formatNumber(reading.steamTotal ?? 0)} ${_friendlyUnit(reading.steamUnit)}',
+      'bunker' => _valueWithUnit(
+        reading.fuelTotal,
+        _friendlyUnit(reading.bunkerUnit),
+        compact,
+      ),
+      'water' => _valueWithUnit(
+        reading.waterTotal,
+        _friendlyUnit(reading.waterUnit),
+        compact,
+      ),
+      'steam' => _valueWithUnit(
+        reading.steamTotal ?? 0,
+        _friendlyUnit(reading.steamUnit),
+        compact,
+      ),
       _ => '-',
     };
+  }
+
+  static String _valueWithUnit(double value, String unit, bool compact) {
+    return '${_formatNumber(value)}${compact ? '\n' : ' '}$unit';
+  }
+
+  static String _compactDate(DateTime value) {
+    final local = value.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = (local.year % 100).toString().padLeft(2, '0');
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$day/$month/$year\n$hour:$minute';
   }
 
   static double? _toDouble(Object? value) {
