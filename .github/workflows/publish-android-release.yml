@@ -44,7 +44,7 @@ jobs:
             gh release upload "$tag" "$apk" --clobber
           else
             gh release create "$tag" "$apk" \
-              --target "$GITHUB_SHA" \
+              --target "main" \
               --title "Eficiencia Energetica EE ${tag#v}" \
               --notes "Actualizacion semiautomatica de Eficiencia Energetica EE para Android."
           fi
