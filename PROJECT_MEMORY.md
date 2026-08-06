@@ -979,10 +979,9 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   fugas con esquema 1 durante la distribucion de Android. El esquema 2 conserva
   todas las validaciones jerarquicas y de identificacion automatica.
 - Commit fuente principal: `6f5abe2`.
-- Pendiente: seleccionar el libro de OneDrive y crear el flujo Power Automate
-  con el Office Script preparado. El primer lote incluye 2 reportes historicos
-  de prueba, por lo que Jeff debe decidir si se importan o se excluyen antes
-  del primer acuse.
+- Resuelto el 2026-08-05: se selecciono el libro de OneDrive, se creo el flujo
+  independiente de Power Automate y se importaron los 2 reportes historicos de
+  prueba tras la solicitud de continuar con el destino indicado por Jeff.
 
 ### 2026-08-05 - Publicacion Android 1.4.0 y aviso de actualizacion
 
@@ -1010,6 +1009,33 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
 - Verificacion: release, tamano, tipo MIME, URL publica, configuracion Firestore
   y dialogo real en Android comprobados. Commits del flujo: `d6e120f` y
   `d532124`.
+
+### 2026-08-05 - Flujo Power Automate para reportes de fugas
+
+- Solicitud: enviar al libro `REPORTE DE FUGAS.xlsx` los reportes de fugas que
+  GitHub recibe desde Firestore, usando un flujo distinto al de calderas.
+- Power Automate: se creo y activo el flujo programado horario
+  `EE - Sincronizar reportes de fugas con Excel`, ID
+  `d3324d4e-9a20-4842-bd2e-25e90c731d9d`.
+- Fuente: repositorio privado `inoxiap/eficiencia-energetica-datos`, issue `#2`.
+  Las acciones de lectura y acuse quedaron verificadas con `issueNumber: 2`.
+- Destino: libro `/MEJORAS/1. SEGUIMIENTO DE LA ENERGIA/REPORTE DE FUGAS.xlsx`
+  del OneDrive/SharePoint de `rpilco_danec_com`; Office Script
+  `EE - Sincronizar reportes de fugas`.
+- Resultado real: la ejecucion manual de las 21:50 termino `Succeeded` en 10
+  segundos. GitHub quedo `acknowledged` con `insertedRows: 2` y
+  `updatedRows: 0`.
+- Verificacion Excel: `App_Fugas` tiene 3 filas contando la cabecera, 36
+  columnas y la tabla `tblAppFugas`. Se conservaron fecha, hora, usuario,
+  destino, tipo, foto Cloudinary y estados de OT/ejecucion.
+- Idempotencia: un lote ya `acknowledged` no modifica Excel; los lotes `ready`
+  actualizan por ID estable y no duplican reportes.
+- Aislamiento: el flujo existente de calderas
+  `EE - Actualizar Excel maestro desde GitHub` no se modifico y continua
+  activo.
+- Archivos principales:
+  `ee_flutter/integrations/leak_excel_sync/office_script.ts` y
+  `ee_flutter/integrations/leak_excel_sync/README.md`.
 
 ## Plantilla para futuras entradas
 
