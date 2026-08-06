@@ -20,6 +20,7 @@ import 'package:sleek_circular_slider/sleek_circular_slider.dart'
 
 import 'domain/bare_pipe.dart';
 import 'domain/boiler_consumption.dart';
+import 'domain/destination_catalog.dart';
 import 'domain/leak_report.dart';
 import 'domain/maintenance_report.dart';
 import 'domain/section_catalog.dart';
@@ -33,6 +34,7 @@ import 'services/cloudinary_service.dart';
 import 'services/consumption_store.dart';
 import 'services/deferred_firestore_consumption_store.dart';
 import 'services/deferred_firestore_report_store.dart';
+import 'services/destination_catalog_loader.dart';
 import 'services/firebase_auth_plugin_registration.dart';
 import 'services/operator_session.dart';
 import 'services/motor_reference_store.dart';

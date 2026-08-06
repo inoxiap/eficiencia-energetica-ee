@@ -1,10 +1,13 @@
-const leakReportSchemaVersion = 1;
+import 'destination_catalog.dart';
 
-enum LeakType { steam, oil, water, air }
+const leakReportSchemaVersion = 2;
+
+enum LeakType { steam, condensate, oil, water, air }
 
 extension LeakTypeDetails on LeakType {
   String get id => switch (this) {
     LeakType.steam => 'steam',
+    LeakType.condensate => 'condensate',
     LeakType.oil => 'oil',
     LeakType.water => 'water',
     LeakType.air => 'air',
@@ -12,6 +15,7 @@ extension LeakTypeDetails on LeakType {
 
   String get displayName => switch (this) {
     LeakType.steam => 'Vapor',
+    LeakType.condensate => 'Condensado',
     LeakType.oil => 'Aceite',
     LeakType.water => 'Agua',
     LeakType.air => 'Aire',
@@ -29,15 +33,12 @@ class LeakReport {
   const LeakReport({
     required this.id,
     required this.createdAt,
-    required this.sectionId,
-    required this.sectionNameSnapshot,
-    required this.equipmentName,
-    required this.equipmentNameNormalized,
+    required this.destination,
     required this.leakType,
-    required this.tagNumber,
     required this.photoUrl,
     required this.photoPublicId,
     this.photoProvider = 'cloudinary',
+    this.locationReference = '',
     this.notes = '',
     this.status = 'open',
     this.workOrderCreated = false,
@@ -46,15 +47,12 @@ class LeakReport {
 
   final String id;
   final DateTime createdAt;
-  final String sectionId;
-  final String sectionNameSnapshot;
-  final String equipmentName;
-  final String equipmentNameNormalized;
+  final DestinationSelection destination;
   final LeakType leakType;
-  final String tagNumber;
   final String photoUrl;
   final String photoPublicId;
   final String photoProvider;
+  final String locationReference;
   final String notes;
   final String status;
   final bool workOrderCreated;
@@ -63,13 +61,22 @@ class LeakReport {
   Map<String, dynamic> toJson() => {
     'id': id,
     'capturedAtLocal': createdAt.toUtc().toIso8601String(),
-    'sectionId': sectionId,
-    'sectionNameSnapshot': sectionNameSnapshot,
-    'equipmentName': equipmentName,
-    'equipmentNameNormalized': equipmentNameNormalized,
+    'sectionId': destination.sectionCode,
+    'sectionCode': destination.sectionCode,
+    'sectionNameSnapshot': destination.sectionName,
+    'processCode': destination.processCode,
+    'processNameSnapshot': destination.processName,
+    'equipmentCode': destination.equipmentCode,
+    'equipmentName': destination.equipmentName,
+    'equipmentNameNormalized': _normalize(destination.equipmentName),
+    'systemCode': destination.systemCode,
+    'systemNameSnapshot': destination.systemName,
+    'destinationId': destination.destinationId,
+    'selectionDepth': destination.selectionDepth,
+    'destinationCatalogVersion': '2.0.0',
+    'locationReference': locationReference,
     'leakType': leakType.id,
     'leakTypeNameSnapshot': leakType.displayName,
-    'tagNumber': tagNumber,
     'photoUrl': photoUrl,
     'photoPublicId': photoPublicId,
     'photoProvider': photoProvider,
@@ -79,4 +86,8 @@ class LeakReport {
     'workCompleted': workCompleted,
     'schemaVersion': leakReportSchemaVersion,
   };
+}
+
+String _normalize(String value) {
+  return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 }

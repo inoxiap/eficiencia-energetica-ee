@@ -54,6 +54,58 @@ service cloud.firestore {
         && request.resource.data.updatedByUid == request.auth.uid;
     }
 
+    function validLeakDestination() {
+      return request.resource.data.sectionCode is string
+        && request.resource.data.processCode is string
+        && request.resource.data.equipmentCode is string
+        && request.resource.data.systemCode is string
+        && request.resource.data.destinationId is string
+        && request.resource.data.selectionDepth
+          in ['none', 'section', 'process', 'equipment', 'system']
+        && request.resource.data.sectionId == request.resource.data.sectionCode
+        && (
+          (
+            request.resource.data.selectionDepth == 'none'
+            && request.resource.data.sectionCode == ''
+            && request.resource.data.processCode == ''
+            && request.resource.data.equipmentCode == ''
+            && request.resource.data.systemCode == ''
+            && request.resource.data.destinationId == ''
+          )
+          || (
+            request.resource.data.selectionDepth == 'section'
+            && request.resource.data.sectionCode.size() > 0
+            && request.resource.data.processCode == ''
+            && request.resource.data.equipmentCode == ''
+            && request.resource.data.systemCode == ''
+            && request.resource.data.destinationId == ''
+          )
+          || (
+            request.resource.data.selectionDepth == 'process'
+            && request.resource.data.sectionCode.size() > 0
+            && request.resource.data.processCode.size() > 0
+            && request.resource.data.equipmentCode == ''
+            && request.resource.data.systemCode == ''
+            && request.resource.data.destinationId == ''
+          )
+          || (
+            request.resource.data.selectionDepth == 'equipment'
+            && request.resource.data.sectionCode.size() > 0
+            && request.resource.data.processCode.size() > 0
+            && request.resource.data.equipmentCode.size() > 0
+            && request.resource.data.systemCode == ''
+          )
+          || (
+            request.resource.data.selectionDepth == 'system'
+            && request.resource.data.sectionCode.size() > 0
+            && request.resource.data.processCode.size() > 0
+            && request.resource.data.equipmentCode.size() > 0
+            && request.resource.data.systemCode.size() > 0
+            && request.resource.data.destinationId.size() > 0
+          )
+        );
+    }
+
     function validCleaverDistributorPressures(values) {
       return values is map
         && values.keys().hasOnly([
@@ -178,7 +230,11 @@ service cloud.firestore {
       allow create: if createsOwnRecord()
         && request.resource.data.sectionId is string
         && request.resource.data.equipmentName is string
-        && request.resource.data.leakType in ['steam', 'oil', 'water', 'air']
+        && validLeakDestination()
+        && request.resource.data.leakType
+          in ['steam', 'condensate', 'oil', 'water', 'air']
+        && request.resource.data.leakNumber is int
+        && request.resource.data.leakNumber > 0
         && request.resource.data.tagNumber is string
         && request.resource.data.tagNumber.size() > 0
         && request.resource.data.photoProvider == 'cloudinary'
@@ -186,6 +242,29 @@ service cloud.firestore {
         && request.resource.data.workCompleted == false;
       allow read: if signedIn();
       allow update: if updatesMaintenanceWorkflow();
+      allow delete: if false;
+    }
+
+    match /maintenance_counters/leak_reports {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'nextNumber',
+          'updatedAt',
+          'updatedByUid'
+        ])
+        && request.resource.data.nextNumber == 1
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+      allow update: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'nextNumber',
+          'updatedAt',
+          'updatedByUid'
+        ])
+        && request.resource.data.nextNumber == resource.data.nextNumber + 1
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
       allow delete: if false;
     }
 

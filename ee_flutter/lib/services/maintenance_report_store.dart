@@ -17,7 +17,7 @@ class MaintenanceReportException implements Exception {
 }
 
 abstract class MaintenanceReportStore {
-  Future<void> saveLeakReport(LeakReport report);
+  Future<String> saveLeakReport(LeakReport report);
 
   Future<List<MaintenanceReportSummary>> loadReports();
 
@@ -35,7 +35,7 @@ class DisabledMaintenanceReportStore implements MaintenanceReportStore {
   Future<List<MaintenanceReportSummary>> loadReports() async => const [];
 
   @override
-  Future<void> saveLeakReport(LeakReport report) {
+  Future<String> saveLeakReport(LeakReport report) {
     throw const MaintenanceReportException(
       'El guardado de fugas no esta disponible.',
     );
@@ -72,26 +72,61 @@ class FirebaseMaintenanceReportStore implements MaintenanceReportStore {
       _firestore ?? FirebaseFirestore.instance;
 
   @override
-  Future<void> saveLeakReport(LeakReport report) async {
+  Future<String> saveLeakReport(LeakReport report) async {
     await _firebaseReady.timeout(timeout);
     final operator = await _requireOperator();
     final packageInfo = await PackageInfo.fromPlatform().timeout(timeout);
-    final data = report.toJson();
-    data.addAll({
-      'createdAt': FieldValue.serverTimestamp(),
-      'createdByUid': operator.uid,
-      'createdByNameSnapshot': operator.displayName,
-      'updatedAt': FieldValue.serverTimestamp(),
-      'updatedByUid': operator.uid,
-      'appVersion': '${packageInfo.version}+${packageInfo.buildNumber}',
-      'platform': kIsWeb ? 'web' : 'android',
-      'source': 'manual',
-    });
-
     final document = _firebaseFirestore
         .collection('leak_reports')
         .doc(report.id);
-    await document.set(data).timeout(timeout);
+    final counter = _firebaseFirestore
+        .collection('maintenance_counters')
+        .doc('leak_reports');
+    final tagNumber = await _firebaseFirestore
+        .runTransaction<String>((transaction) async {
+          final existing = await transaction.get(document);
+          if (existing.exists) {
+            final data = existing.data();
+            if (data?['createdByUid'] != operator.uid) {
+              throw const MaintenanceReportException(
+                'El identificador del reporte ya esta en uso.',
+              );
+            }
+            final existingTag = data?['tagNumber'] as String? ?? '';
+            if (existingTag.isEmpty) {
+              throw const MaintenanceReportException(
+                'El reporte existente no tiene identificacion.',
+              );
+            }
+            return existingTag;
+          }
+
+          final counterSnapshot = await transaction.get(counter);
+          final previous = counterSnapshot.data()?['nextNumber'];
+          final nextNumber = previous is int ? previous + 1 : 1;
+          final nextTag = 'F-${nextNumber.toString().padLeft(6, '0')}';
+          final data = report.toJson();
+          data.addAll({
+            'leakNumber': nextNumber,
+            'tagNumber': nextTag,
+            'createdAt': FieldValue.serverTimestamp(),
+            'createdByUid': operator.uid,
+            'createdByNameSnapshot': operator.displayName,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'updatedByUid': operator.uid,
+            'appVersion': '${packageInfo.version}+${packageInfo.buildNumber}',
+            'platform': kIsWeb ? 'web' : 'android',
+            'source': 'manual',
+          });
+          transaction.set(counter, {
+            'nextNumber': nextNumber,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'updatedByUid': operator.uid,
+          });
+          transaction.set(document, data);
+          return nextTag;
+        })
+        .timeout(timeout);
     final confirmation = await document
         .get(const GetOptions(source: Source.server))
         .timeout(timeout);
@@ -100,6 +135,7 @@ class FirebaseMaintenanceReportStore implements MaintenanceReportStore {
         'Firebase no confirmo el reporte de fuga.',
       );
     }
+    return tagNumber;
   }
 
   @override
@@ -199,12 +235,17 @@ class FirebaseMaintenanceReportStore implements MaintenanceReportStore {
         (data['leakTypeNameSnapshot'] as String? ?? '').trim().isNotEmpty
         ? data['leakTypeNameSnapshot'] as String
         : type?.displayName ?? 'Sin tipo';
+    final equipmentName = (data['equipmentName'] as String? ?? '').trim();
+    final locationReference = (data['locationReference'] as String? ?? '')
+        .trim();
     return MaintenanceReportSummary(
       id: id,
       type: MaintenanceReportType.leak,
       createdAt: _toDateTime(data['createdAt'], data['capturedAtLocal']),
       sectionName: _sectionName(data),
-      equipmentName: data['equipmentName'] as String? ?? '',
+      equipmentName: equipmentName.isNotEmpty
+          ? equipmentName
+          : locationReference,
       detail: tag.isEmpty ? 'Fuga de $typeName' : 'Fuga de $typeName - N. $tag',
       photoUrl: data['photoUrl'] as String? ?? '',
       createdByName: data['createdByNameSnapshot'] as String? ?? 'Historico',

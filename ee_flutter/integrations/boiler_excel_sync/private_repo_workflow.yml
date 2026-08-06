@@ -1,4 +1,4 @@
-name: Sincronizar consumos de calderas con Excel
+name: Sincronizar datos de eficiencia con Excel
 
 on:
   workflow_dispatch:
@@ -29,15 +29,22 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: source/ee_flutter/integrations/boiler_excel_sync/requirements.txt
+          cache-dependency-path: |
+            source/ee_flutter/integrations/boiler_excel_sync/requirements.txt
+            source/ee_flutter/integrations/leak_excel_sync/requirements.txt
 
       - name: Instalar dependencias
         working-directory: source/ee_flutter/integrations/boiler_excel_sync
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install -r ../leak_excel_sync/requirements.txt
 
       - name: Ejecutar pruebas de transformacion
         working-directory: source/ee_flutter/integrations/boiler_excel_sync
-        run: python -m unittest -v test_exporter.py
+        run: |
+          python -m unittest -v test_exporter.py
+          cd ../leak_excel_sync
+          python -m unittest -v test_exporter.py
 
       - name: Publicar payload incremental en este issue privado
         working-directory: source/ee_flutter/integrations/boiler_excel_sync
@@ -53,3 +60,12 @@ jobs:
           else
             python exporter.py
           fi
+
+      - name: Publicar reportes de fugas incrementales
+        working-directory: source/ee_flutter/integrations/leak_excel_sync
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          EE_DATA_REPOSITORY: ${{ github.repository }}
+          EE_LEAK_ISSUE_NUMBER: "2"
+          EE_DATA_REPO_TOKEN: ${{ github.token }}
+        run: python exporter.py

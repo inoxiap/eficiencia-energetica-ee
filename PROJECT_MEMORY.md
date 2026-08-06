@@ -879,6 +879,97 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
 - Commits principales: `378108a`, `c5933f5` y `e1632ca`.
 - Pendientes: ninguno para esta solicitud.
 
+### 2026-07-29 - Recuperacion del Excel tras sobrescritura de OneDrive
+
+- Incidente: el libro local ordenado el 2026-07-28 se sincronizo tarde y
+  reemplazo la version de la nube que habia seguido recibiendo lecturas durante
+  la noche y la manana del 29. No se restauro una version a ciegas: Firestore
+  se mantuvo como fuente oficial.
+- Respaldo inmediato de la copia sobrescrita, fuera de OneDrive:
+  `outputs/excel-recovery-20260729/REPORTE DE CALDERAS 2018 - copia local tras sobrescritura 2026-07-29.xlsx`.
+  SHA-256:
+  `7F2C3B0BED9D476ABF6B046E95FB0A19C09EF937539F0DA816272FE763259D6C`.
+- Diagnostico: el libro sobrescrito conservaba 68 lecturas y terminaba el
+  2026-07-28 a las 11:02 de Ecuador. Una sincronizacion automatica posterior
+  agrego cuatro lecturas del 29; al comparar los IDs con Firestore quedaron 30
+  faltantes: 18 del 28 y 12 del 29.
+- Fuente oficial: Firestore contenia 102 lecturas desde el 24 hasta el 29 de
+  julio: 6, 7, 16, 28, 29 y 16 por fecha local. Por caldera eran 26 de Alfa
+  Laval, 4 de Distral 900 y 72 de Cleaver Brooks.
+- Recuperacion idempotente: se reprocesaron completos los dias 2026-07-28 y
+  2026-07-29. GitHub Actions termino correctamente en las ejecuciones
+  `30487177795` y `30487340286`, con lotes de 29 y 16 lecturas. Power Automate
+  tambien termino correctamente en las ejecuciones
+  `08584162512163860436299831807CU09` y
+  `08584162510777747168439869363CU04`; ambos lotes quedaron
+  `acknowledged`.
+- Verificacion cloud: `App_Datos_Firestore!A103` contiene
+  `cleaver_brooks_1200_2026072920` y `A104` esta vacia. Esto corresponde a 102
+  filas de datos mas la cabecera. `Regist_inform!A6500:A6501` contiene las dos
+  filas del 2026-07-29 y `A6502` esta vacia.
+- Verificacion local despues de que OneDrive bajo la version restaurada:
+  `App_Datos_Firestore` tiene 102 IDs, exactamente los mismos que Firestore,
+  con 0 faltantes, 0 extras y 0 duplicados. `App_Intervalos` tiene 102 filas,
+  `App_Consumo_Horario` 302 y `App_Resumen_Diario` 14, sin contar cabeceras.
+  `Regist_inform` conserva 14 filas administradas desde el 24, incluidas dos
+  del 29 para `CalAlfa` y `CalCleaver`.
+- Integridad: el libro conserva 15 hojas y 58.519 celdas con formulas. Los
+  errores de formula existentes se limitan al rango historico
+  `rev_900-700!L5:L31`; no aparecen en las hojas administradas por la app.
+- Respaldo final restaurado, fuera de OneDrive:
+  `outputs/excel-recovery-20260729/REPORTE DE CALDERAS 2018 - recuperado 2026-07-29 1510.xlsx`.
+  Pesa 1.718.182 bytes y su SHA-256 es
+  `D2B0F4ADDAAA5693157002068031A2BF3F6BB9CA67FA024FEE27C49A10781007`.
+- Regla operativa: antes de modificar localmente el maestro, confirmar que
+  OneDrive muestre sincronizacion completa. Si no esta sincronizado, trabajar
+  sobre una copia fuera de OneDrive y no reemplazar el maestro. Para cambios
+  importantes, conservar respaldo externo y comprobar despues los IDs contra
+  Firestore.
+
+### 2026-08-05 - Destinos jerarquicos y transporte de fugas
+
+- Solicitud: reemplazar la seccion generica de fugas por selectores dependientes
+  Macroarea -> Proceso/destino general -> Equipo -> Sistema/subsistema usando
+  `destinations-phanto-ready.json`, permitir seleccion parcial y preparar el
+  transito Firestore -> GitHub -> Power Automate -> Excel.
+- Catalogo: la fuente contiene 5.097 destinos, 16 macroareas y version 2.0.0.
+  `tool/generate_destination_catalog.cjs` valida nombres y hojas ambiguas y
+  genera `assets/destination_catalog.json` de 588.428 bytes. No se incluye el
+  JSON fuente de 5 MB en el APK.
+- Interfaz: cada selector ofrece una opcion vacia y ningun descendiente se
+  autoselecciona. Cambiar macroarea limpia proceso, equipo, sistema e ID;
+  cambiar proceso limpia equipo, sistema e ID; cambiar equipo limpia sistema e
+  ID. La captura puede terminar en cualquier nivel, incluso `none`.
+- Persistencia: `leak_reports` usa esquema 2 con `sectionCode`, `processCode`,
+  `equipmentCode`, `systemCode`, `destinationId` y `selectionDepth`, ademas de
+  snapshots visibles. Los 13 equipos sin sistema de NO OPERATIVOS se reconocen
+  como hojas terminales. Se agrego `condensate` como tipo de fuga.
+- Identificacion: el usuario ya no escribe el numero. Una transaccion sobre
+  `maintenance_counters/leak_reports` asigna `leakNumber` y `tagNumber` con
+  formato `F-000001`; reintentar el mismo documento es idempotente.
+- Auditoria: fecha y hora usan timestamps de servidor, y usuario, version y
+  plataforma se toman automaticamente de la sesion y del aplicativo.
+- Transporte: `integrations/leak_excel_sync` publica en un issue privado solo
+  reportes nuevos o modificados por `updatedAt`. Incluye estados de OT y trabajo
+  ejecutado, foto, destino, fecha, hora y usuario. Un lote `ready` bloquea nuevas
+  lecturas hasta recibir acuse `acknowledged`; GitHub es transito, no historico.
+  El Office Script crea o actualiza `App_Fugas`/`tblAppFugas` por ID estable.
+- Eficiencia: el exportador de fugas se agrega al mismo workflow horario de
+  calderas para no duplicar minutos de GitHub Actions. Cada lote se limita a 50
+  filas y el siguiente avanza desde el cursor confirmado.
+- Version: Flutter `1.4.0+8`. Hosting y reglas Firestore se desplegaron en
+  produccion en `https://eficiencia-energetica-ee.web.app`.
+- Pruebas/builds: `flutter analyze` sin hallazgos, 51 pruebas Flutter y 4 del
+  exportador de fugas aprobadas; Functions y Office Script compilaron; web y APK
+  release correctos. El APK pesa 53,7 MB, verifica firma v2 y tiene SHA-256
+  `7AD122631703C21B62BBE554F677E3DCFCA3ED04EACFCA6864CA5153F44C9381`.
+- Verificacion visual: produccion se reviso con una sesion real sin escribir
+  datos. Macroarea, proceso y equipo aparecieron de forma dependiente; cambiar
+  macroarea limpio los niveles inferiores. No hubo errores de consola.
+- Pendiente: publicar el APK build 8 y actualizar el aviso remoto; instalar el
+  workflow privado e issue de fugas; seleccionar el libro de OneDrive y crear
+  el flujo Power Automate con el Office Script preparado.
+
 ## Plantilla para futuras entradas
 
 ```markdown

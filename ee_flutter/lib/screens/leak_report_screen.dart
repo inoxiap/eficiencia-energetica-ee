@@ -5,12 +5,14 @@ class LeakReportScreen extends StatefulWidget {
     required this.store,
     required this.cloudinaryService,
     required this.operatorSession,
+    this.destinationCatalog,
     super.key,
   });
 
   final MaintenanceReportStore store;
   final CloudinaryService cloudinaryService;
   final OperatorSession operatorSession;
+  final DestinationCatalog? destinationCatalog;
 
   @override
   State<LeakReportScreen> createState() => _LeakReportScreenState();
@@ -18,11 +20,15 @@ class LeakReportScreen extends StatefulWidget {
 
 class _LeakReportScreenState extends State<LeakReportScreen> {
   final _picker = ImagePicker();
-  final _equipmentController = TextEditingController();
-  final _tagController = TextEditingController();
+  final _referenceController = TextEditingController();
   Uint8List? _photoBytes;
   CloudinaryUpload? _uploadedEvidence;
-  String _sectionId = '';
+  DestinationCatalog? _catalog;
+  String _catalogError = '';
+  String _sectionCode = '';
+  String _processCode = '';
+  String _equipmentCode = '';
+  String _systemCode = '';
   String _leakTypeId = '';
   String? _reportId;
   bool _reviewReady = false;
@@ -31,15 +37,22 @@ class _LeakReportScreenState extends State<LeakReportScreen> {
   MessageType _messageType = MessageType.info;
 
   @override
+  void initState() {
+    super.initState();
+    _catalog = widget.destinationCatalog;
+    if (_catalog == null) _loadCatalog();
+  }
+
+  @override
   void dispose() {
-    _equipmentController.dispose();
-    _tagController.dispose();
+    _referenceController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final leakType = leakTypeById(_leakTypeId);
+    final destination = _currentDestination;
     return AppShell(
       bottomNavigationBar: const HomeNavigationBar(),
       children: [
@@ -67,31 +80,35 @@ class _LeakReportScreenState extends State<LeakReportScreen> {
         ],
         const SizedBox(height: 18),
         Text(
-          'Seleccione la seccion',
+          'Seleccione el destino hasta donde lo conozca',
           style: Theme.of(context).textTheme.labelBold,
         ),
         const SizedBox(height: 8),
-        EmbeddedWheelPicker<String>(
-          value: _sectionId,
-          options: [
-            const PickerOption('', 'Selecciona una seccion'),
-            ...plantSections.map(
-              (section) => PickerOption(section.id, section.displayName),
+        if (_catalog == null && _catalogError.isEmpty)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(),
             ),
-          ],
-          onSelected: (value) => setState(() {
-            _sectionId = value;
-            _invalidateReview();
-          }),
-        ),
+          )
+        else if (_catalogError.isNotEmpty) ...[
+          MessageBox(type: MessageType.error, message: _catalogError),
+          const SizedBox(height: 8),
+          EeActionButton(
+            icon: Icons.refresh,
+            label: 'Reintentar catalogo',
+            onPressed: _loadCatalog,
+          ),
+        ] else
+          _buildDestinationSelectors(_catalog!),
         const SizedBox(height: 14),
         TextField(
-          controller: _equipmentController,
+          controller: _referenceController,
           enabled: !_isSubmitting,
           textCapitalization: TextCapitalization.sentences,
           decoration: const InputDecoration(
-            labelText: 'Equipo o ubicacion (opcional)',
-            hintText: 'Ej. Linea de tracing del tanque 4',
+            labelText: 'Referencia adicional (opcional)',
+            hintText: 'Ej. Linea de tracing junto al tanque 4',
           ),
           onChanged: (_) => setState(_invalidateReview),
         ),
@@ -114,27 +131,13 @@ class _LeakReportScreenState extends State<LeakReportScreen> {
             _invalidateReview();
           }),
         ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: _tagController,
-          enabled: !_isSubmitting,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          maxLength: 12,
-          decoration: const InputDecoration(
-            labelText: 'Numero de identificacion de la fuga',
-            hintText: 'Numero colocado en la latita',
-            counterText: '',
-          ),
-          onChanged: (_) => setState(_invalidateReview),
-        ),
         const SizedBox(height: 16),
         EeActionButton(
           icon: Icons.fact_check_outlined,
           label: 'Revisar reporte',
           onPressed: _isSubmitting ? null : _review,
         ),
-        if (_reviewReady && leakType != null) ...[
+        if (_reviewReady && leakType != null && destination != null) ...[
           const SizedBox(height: 14),
           InfoPanel(
             children: [
@@ -144,21 +147,21 @@ class _LeakReportScreenState extends State<LeakReportScreen> {
               ),
               const SizedBox(height: 12),
               LabelValue(
-                label: 'Seccion',
-                value: plantSectionById(_sectionId)?.displayName ?? '',
+                label: 'Destino',
+                value: _destinationSummary(destination),
               ),
               const SizedBox(height: 10),
               TwoColumnInfo(
                 leftLabel: 'Tipo de fuga',
                 leftValue: leakType.displayName,
                 rightLabel: 'Identificacion',
-                rightValue: _tagController.text.trim(),
+                rightValue: 'Se asigna al guardar',
               ),
-              if (_equipmentController.text.trim().isNotEmpty) ...[
+              if (_referenceController.text.trim().isNotEmpty) ...[
                 const SizedBox(height: 10),
                 LabelValue(
-                  label: 'Equipo o ubicacion',
-                  value: _equipmentController.text.trim(),
+                  label: 'Referencia adicional',
+                  value: _referenceController.text.trim(),
                 ),
               ],
             ],
@@ -182,6 +185,151 @@ class _LeakReportScreenState extends State<LeakReportScreen> {
         ],
       ],
     );
+  }
+
+  Widget _buildDestinationSelectors(DestinationCatalog catalog) {
+    final section = catalog.sectionByCode(_sectionCode);
+    final process = section?.processByCode(_processCode);
+    final equipment = process?.equipmentByCode(_equipmentCode);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _destinationPicker(
+          label: 'Macroarea',
+          value: _sectionCode,
+          emptyLabel: 'Sin macroarea',
+          options: catalog.sections
+              .map((item) => PickerOption(item.code, item.name))
+              .toList(growable: false),
+          onSelected: (value) => setState(() {
+            _sectionCode = value;
+            _processCode = '';
+            _equipmentCode = '';
+            _systemCode = '';
+            _invalidateReview();
+          }),
+        ),
+        if (section != null) ...[
+          const SizedBox(height: 12),
+          _destinationPicker(
+            label: 'Proceso o destino general',
+            value: _processCode,
+            emptyLabel: 'Finalizar en ${section.name}',
+            options: section.processes
+                .map((item) => PickerOption(item.code, item.name))
+                .toList(growable: false),
+            onSelected: (value) => setState(() {
+              _processCode = value;
+              _equipmentCode = '';
+              _systemCode = '';
+              _invalidateReview();
+            }),
+          ),
+        ],
+        if (process != null) ...[
+          const SizedBox(height: 12),
+          _destinationPicker(
+            label: 'Equipo',
+            value: _equipmentCode,
+            emptyLabel: 'Finalizar en ${process.name}',
+            options: process.equipment
+                .map(
+                  (item) =>
+                      PickerOption(item.code, '${item.code} - ${item.name}'),
+                )
+                .toList(growable: false),
+            onSelected: (value) => setState(() {
+              _equipmentCode = value;
+              _systemCode = '';
+              _invalidateReview();
+            }),
+          ),
+        ],
+        if (equipment != null && equipment.systems.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _destinationPicker(
+            label: 'Sistema o subsistema',
+            value: _systemCode,
+            emptyLabel: 'Finalizar en ${equipment.name}',
+            options: equipment.systems
+                .map(
+                  (item) =>
+                      PickerOption(item.code, '${item.code} - ${item.name}'),
+                )
+                .toList(growable: false),
+            onSelected: (value) => setState(() {
+              _systemCode = value;
+              _invalidateReview();
+            }),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _destinationPicker({
+    required String label,
+    required String value,
+    required String emptyLabel,
+    required List<PickerOption<String>> options,
+    required ValueChanged<String> onSelected,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.labelBold),
+        const SizedBox(height: 6),
+        EmbeddedWheelPicker<String>(
+          value: value,
+          height: 112,
+          options: [PickerOption('', emptyLabel), ...options],
+          onSelected: onSelected,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _loadCatalog() async {
+    setState(() {
+      _catalogError = '';
+      _catalog = null;
+    });
+    try {
+      final catalog = await const DestinationCatalogLoader().load();
+      if (!mounted) return;
+      setState(() => _catalog = catalog);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _catalogError =
+            'No fue posible cargar el catalogo de destinos. Reintenta.';
+      });
+    }
+  }
+
+  DestinationSelection? get _currentDestination {
+    final catalog = _catalog;
+    if (catalog == null) return null;
+    try {
+      return catalog.selection(
+        sectionCode: _sectionCode,
+        processCode: _processCode,
+        equipmentCode: _equipmentCode,
+        systemCode: _systemCode,
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+
+  String _destinationSummary(DestinationSelection destination) {
+    final labels = [
+      destination.sectionName,
+      destination.processName,
+      destination.equipmentName,
+      destination.systemName,
+    ].where((value) => value.isNotEmpty).toList(growable: false);
+    return labels.isEmpty ? 'Sin especificar' : labels.join(' > ');
   }
 
   Future<void> _pickPhoto() async {
@@ -213,19 +361,15 @@ class _LeakReportScreenState extends State<LeakReportScreen> {
       _setMessage(MessageType.error, 'Captura una foto de la fuga.');
       return;
     }
-    if (plantSectionById(_sectionId) == null) {
-      _setMessage(MessageType.error, 'Selecciona la seccion.');
+    if (_catalog == null || _currentDestination == null) {
+      _setMessage(
+        MessageType.error,
+        'Espera a que el catalogo de destinos este disponible.',
+      );
       return;
     }
     if (leakTypeById(_leakTypeId) == null) {
       _setMessage(MessageType.error, 'Selecciona el tipo de fuga.');
-      return;
-    }
-    if (_tagController.text.trim().isEmpty) {
-      _setMessage(
-        MessageType.error,
-        'Ingresa el numero de identificacion colocado en la fuga.',
-      );
       return;
     }
     setState(() {
@@ -239,12 +383,12 @@ class _LeakReportScreenState extends State<LeakReportScreen> {
 
   Future<void> _save() async {
     final photoBytes = _photoBytes;
-    final section = plantSectionById(_sectionId);
+    final destination = _currentDestination;
     final leakType = leakTypeById(_leakTypeId);
     final reportId = _reportId;
     if (!_reviewReady ||
         photoBytes == null ||
-        section == null ||
+        destination == null ||
         leakType == null ||
         reportId == null ||
         _isSubmitting) {
@@ -262,7 +406,7 @@ class _LeakReportScreenState extends State<LeakReportScreen> {
       return;
     }
 
-    final confirmed = await _confirmSave(operator, section, leakType);
+    final confirmed = await _confirmSave(operator, destination, leakType);
     if (!mounted || confirmed != true) return;
     setState(() {
       _isSubmitting = true;
@@ -284,28 +428,22 @@ class _LeakReportScreenState extends State<LeakReportScreen> {
         _uploadedEvidence = upload;
         _message = 'Evidencia subida. Confirmando el reporte en Firebase...';
       });
-      await widget.store.saveLeakReport(
+      final tag = await widget.store.saveLeakReport(
         LeakReport(
           id: reportId,
           createdAt: DateTime.now(),
-          sectionId: section.id,
-          sectionNameSnapshot: section.displayName,
-          equipmentName: _equipmentController.text.trim(),
-          equipmentNameNormalized: normalizeEquipmentName(
-            _equipmentController.text,
-          ),
+          destination: destination,
           leakType: leakType,
-          tagNumber: _tagController.text.trim(),
+          locationReference: _referenceController.text.trim(),
           photoUrl: upload.secureUrl,
           photoPublicId: upload.publicId,
         ),
       );
       if (!mounted) return;
-      final tag = _tagController.text.trim();
       setState(() {
         _resetForm();
         _messageType = MessageType.success;
-        _message = 'Fuga N. $tag guardada correctamente.';
+        _message = 'Fuga $tag guardada correctamente.';
       });
     } on MaintenanceReportException catch (error) {
       if (!mounted) return;
@@ -326,7 +464,7 @@ class _LeakReportScreenState extends State<LeakReportScreen> {
 
   Future<bool?> _confirmSave(
     AuthenticatedOperator operator,
-    PlantSection section,
+    DestinationSelection destination,
     LeakType leakType,
   ) {
     return showDialog<bool>(
@@ -349,12 +487,16 @@ class _LeakReportScreenState extends State<LeakReportScreen> {
                   ),
                 ),
               const SizedBox(height: 12),
-              Text('Seccion: ${section.displayName}'),
+              Text('Destino: ${_destinationSummary(destination)}'),
               Text('Tipo: ${leakType.displayName}'),
-              Text('Identificacion: ${_tagController.text.trim()}'),
-              if (_equipmentController.text.trim().isNotEmpty)
-                Text('Ubicacion: ${_equipmentController.text.trim()}'),
+              const Text('Identificacion: se asigna automaticamente'),
+              if (_referenceController.text.trim().isNotEmpty)
+                Text('Referencia: ${_referenceController.text.trim()}'),
               Text('Usuario: ${operator.displayName}'),
+              Text(
+                'Fecha y hora: '
+                '${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
+              ),
             ],
           ),
         ),
@@ -384,12 +526,14 @@ class _LeakReportScreenState extends State<LeakReportScreen> {
     _isSubmitting = false;
     _photoBytes = null;
     _uploadedEvidence = null;
-    _sectionId = '';
+    _sectionCode = '';
+    _processCode = '';
+    _equipmentCode = '';
+    _systemCode = '';
     _leakTypeId = '';
     _reportId = null;
     _reviewReady = false;
-    _equipmentController.clear();
-    _tagController.clear();
+    _referenceController.clear();
   }
 
   void _setMessage(MessageType type, String message) {

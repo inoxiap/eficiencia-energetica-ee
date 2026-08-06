@@ -103,18 +103,40 @@ El lector acepta documentos historicos y nuevos. provider sera cloudinary.
 
 Coleccion separada para fugas de planta:
 
-    sectionId, sectionNameSnapshot
-    equipmentName, equipmentNameNormalized
-    leakType: steam | oil | water | air
-    leakTypeNameSnapshot, tagNumber
+    sectionId, sectionCode, sectionNameSnapshot
+    processCode, processNameSnapshot
+    equipmentCode, equipmentName, equipmentNameNormalized
+    systemCode, systemNameSnapshot
+    destinationId
+    selectionDepth: none | section | process | equipment | system
+    destinationCatalogVersion
+    locationReference
+    leakType: steam | condensate | oil | water | air
+    leakTypeNameSnapshot, leakNumber, tagNumber
     photoUrl, photoPublicId, photoProvider: cloudinary
     workOrderCreated, workOrderCreatedAt, workOrderCreatedByUid
     workCompleted, workCompletedAt, workCompletedByUid
     status: open | work_order_created | completed
 
+Los codigos descendientes quedan vacios cuando su padre no fue seleccionado.
+`destinationId` solo se completa al elegir explicitamente una hoja terminal
+unica; en NO OPERATIVOS el equipo puede ser esa hoja. `leakNumber` se obtiene
+mediante un contador transaccional y `tagNumber` usa el formato `F-000001`.
+
 El reporte se crea solo despues de revisar y confirmar. Todos los operadores
 autenticados pueden consultar fugas y tuberias y actualizar exclusivamente el
 flujo de mantenimiento.
+
+## maintenance_counters/leak_reports
+
+Documento tecnico para asignar identificaciones consecutivas sin colisiones:
+
+    nextNumber
+    updatedAt: server timestamp
+    updatedByUid
+
+Solo permite creacion en 1 e incrementos unitarios. No admite borrado desde el
+cliente.
 
 ## boiler_consumption_readings
 

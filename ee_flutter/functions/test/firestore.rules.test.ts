@@ -57,10 +57,20 @@ function trapReport(uid: string) {
 function leakReport(uid: string) {
   return {
     id: "leak-1",
-    sectionId: "refineria",
-    sectionNameSnapshot: "Refineria",
-    equipmentName: "Linea 1",
+    sectionId: "1",
+    sectionCode: "1",
+    sectionNameSnapshot: "REFINERIA",
+    processCode: "",
+    processNameSnapshot: "",
+    equipmentCode: "",
+    equipmentName: "",
+    systemCode: "",
+    systemNameSnapshot: "",
+    destinationId: "",
+    selectionDepth: "section",
+    locationReference: "Linea 1",
     leakType: "steam",
+    leakNumber: 1,
     tagNumber: "25",
     photoProvider: "cloudinary",
     photoUrl: "https://example.test/photo.jpg",
@@ -72,7 +82,7 @@ function leakReport(uid: string) {
     updatedByUid: uid,
     appVersion: "1.0.1+2",
     platform: "android",
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "open",
     source: "manual",
   };
@@ -221,6 +231,49 @@ describe("Firestore rules", () => {
       }),
     );
     await assertFails(updateDoc(sharedReference, {sectionId: "dex"}));
+  });
+
+  it("accepts partial leak destinations and rejects orphan child codes", async () => {
+    const operator = environment
+      .authenticatedContext("operator-1", {role: "operator"})
+      .firestore();
+    const partial = leakReport("operator-1");
+    partial.leakType = "condensate";
+    await assertSucceeds(
+      setDoc(doc(operator, "leak_reports/leak-partial"), partial),
+    );
+
+    const orphan = leakReport("operator-1");
+    orphan.sectionId = "";
+    orphan.sectionCode = "";
+    orphan.processCode = "1";
+    orphan.selectionDepth = "process";
+    await assertFails(
+      setDoc(doc(operator, "leak_reports/leak-orphan"), orphan),
+    );
+  });
+
+  it("only permits sequential increments of the leak counter", async () => {
+    const operator = environment
+      .authenticatedContext("operator-1", {role: "operator"})
+      .firestore();
+    const counter = doc(operator, "maintenance_counters/leak_reports");
+    await assertSucceeds(
+      setDoc(counter, {
+        nextNumber: 1,
+        updatedAt: serverTimestamp(),
+        updatedByUid: "operator-1",
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(counter, {
+        nextNumber: 2,
+        updatedAt: serverTimestamp(),
+        updatedByUid: "operator-1",
+      }),
+    );
+    await assertFails(updateDoc(counter, {nextNumber: 4}));
+    await assertFails(deleteDoc(counter));
   });
 
   it("rejects a forged createdByUid", async () => {

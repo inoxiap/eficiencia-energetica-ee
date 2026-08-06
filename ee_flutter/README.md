@@ -7,13 +7,18 @@ calculos de eficiencia energetica y trazabilidad en Firebase.
 
 - Dimensionamiento de trampas de vapor.
 - Reporte de tuberia desnuda con fotos en Cloudinary.
-- Reporte de fugas de vapor, aceite, agua y aire con fotos en Cloudinary.
+- Reporte de fugas de vapor, condensado, aceite, agua y aire con fotos en
+  Cloudinary y destino jerarquico SISMAC.
 - Seguimiento operativo de OT generada y trabajo ejecutado.
 - Lecturas acumuladas de calderas y presiones de distribuidores.
 - Registro e inicio de sesion de operadores.
 - Levantamiento electrico de bombas.
 - Panel administrador legado dentro de Flutter, sin cambios funcionales.
 - Dashboard administrador independiente en energy_dashboard/.
+
+El reporte de fugas permite detener la seleccion en macroarea, proceso, equipo
+o sistema. La fecha, hora, usuario e identificacion consecutiva se asignan
+automaticamente.
 
 ## Arquitectura
 

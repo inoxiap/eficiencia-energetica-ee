@@ -34,6 +34,15 @@ Se conservan bare_pipe_reports y boiler_consumption_readings. Se agregan:
 
 Los lectores mantienen compatibilidad con fechas ISO y campos historicos.
 
+El catalogo de destinos de fugas se genera desde el JSON SISMAC validado. El
+asset Flutter conserva codigos y etiquetas en una jerarquia compacta; no
+autoselecciona descendientes. La eleccion parcial es valida y la ultima hoja
+unica determina `destinationId`.
+
+Firestore sigue siendo la fuente oficial de fugas. El transporte a Excel usa
+un lote incremental en un issue privado de GitHub y un Office Script
+idempotente por `id`; GitHub no se usa como almacenamiento historico.
+
 ## Autenticacion
 
 La cedula+PIN se resuelve directamente con Firebase Authentication usando el
