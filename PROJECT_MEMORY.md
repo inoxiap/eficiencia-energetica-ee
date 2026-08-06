@@ -1,6 +1,6 @@
 # Memoria del proyecto: Eficiencia Energetica EE
 
-Ultima actualizacion: 2026-07-27
+Ultima actualizacion: 2026-08-05
 
 Este documento es la memoria operativa persistente del proyecto. Debe leerse
 completo al iniciar o retomar cualquier tarea y actualizarse al terminar cambios
@@ -16,7 +16,7 @@ o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
   `https://github.com/inoxiap/eficiencia-energetica-ee.git`
 - Rama principal: `main`.
 - Aplicacion activa: `ee_flutter/`.
-- Version Flutter registrada: `1.1.2+5`.
+- Version Flutter registrada: `1.4.0+8`.
 - La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
   historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
 
@@ -66,6 +66,10 @@ necesitar criterio tecnico avanzado para completar un levantamiento.
 - Plan Firebase: Spark.
 - Web/PWA:
   `https://eficiencia-energetica-ee.web.app`
+- Android vigente:
+  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/tag/v1.4.0`.
+- `app_config/mobile_app` anuncia `1.4.0+8` con actualizacion opcional y URL
+  directa al APK firmado.
 - Firebase Hosting publica `ee_flutter/build/web`.
 - El proveedor Firebase Authentication Email/Password fue habilitado y probado
   en produccion el 2026-07-16.
@@ -975,10 +979,37 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   fugas con esquema 1 durante la distribucion de Android. El esquema 2 conserva
   todas las validaciones jerarquicas y de identificacion automatica.
 - Commit fuente principal: `6f5abe2`.
-- Pendiente: publicar el APK build 8 y actualizar el aviso remoto; seleccionar
-  el libro de OneDrive y crear el flujo Power Automate con el Office Script
-  preparado. El primer lote incluye 2 reportes historicos de prueba, por lo que
-  Jeff debe decidir si se importan o se excluyen antes del primer acuse.
+- Pendiente: seleccionar el libro de OneDrive y crear el flujo Power Automate
+  con el Office Script preparado. El primer lote incluye 2 reportes historicos
+  de prueba, por lo que Jeff debe decidir si se importan o se excluyen antes
+  del primer acuse.
+
+### 2026-08-05 - Publicacion Android 1.4.0 y aviso de actualizacion
+
+- Incidente: la web build 8 estaba publicada, pero Firestore continuaba
+  anunciando Android `1.3.0+7`; por eso los telefonos con build 7 no mostraban
+  ninguna actualizacion.
+- Publicacion: se creo el release `v1.4.0` con el APK firmado build 8 de
+  56.341.621 bytes. La descarga responde HTTP 200 con tipo
+  `application/vnd.android.package-archive`.
+- Firebase: `app_config/mobile_app` quedo en `latestBuildNumber: 8`,
+  `androidLatestBuildNumber: 8`, version `1.4.0`, actualizacion opcional y URL
+  directa al release.
+- Prueba Android: el Pixel 8 con `1.2.0+6` mostro el dialogo
+  `Actualizacion disponible`, la version instalada, la disponible y el boton
+  `Actualizar`. En un arranque completamente frio el dialogo tardo cerca de
+  medio minuto mientras Firebase y la sesion se inicializaban.
+- Automatizacion: se agrego
+  `.github/workflows/publish-android-release.yml`. Publica el APK firmado desde
+  una rama temporal `android-release/vX.Y.Z`; el tag apunta a `main` y la rama
+  temporal se elimina despues, evitando conservar el binario en el historial
+  normal.
+- Restriccion confirmada: Firebase Hosting en plan Spark rechaza APK y otros
+  ejecutables. GitHub Releases permanece como alojamiento de actualizaciones
+  Android.
+- Verificacion: release, tamano, tipo MIME, URL publica, configuracion Firestore
+  y dialogo real en Android comprobados. Commits del flujo: `d6e120f` y
+  `d532124`.
 
 ## Plantilla para futuras entradas
 
