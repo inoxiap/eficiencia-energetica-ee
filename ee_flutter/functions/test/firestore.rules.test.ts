@@ -253,6 +253,26 @@ describe("Firestore rules", () => {
     );
   });
 
+  it("keeps schema 1 leak creation compatible during the app rollout", async () => {
+    const operator = environment
+      .authenticatedContext("operator-1", {role: "operator"})
+      .firestore();
+    const legacy: Record<string, unknown> = leakReport("operator-1");
+    legacy.schemaVersion = 1;
+    delete legacy.sectionCode;
+    delete legacy.processCode;
+    delete legacy.processNameSnapshot;
+    delete legacy.equipmentCode;
+    delete legacy.systemCode;
+    delete legacy.systemNameSnapshot;
+    delete legacy.destinationId;
+    delete legacy.selectionDepth;
+    delete legacy.leakNumber;
+    await assertSucceeds(
+      setDoc(doc(operator, "leak_reports/leak-legacy"), legacy),
+    );
+  });
+
   it("only permits sequential increments of the leak counter", async () => {
     const operator = environment
       .authenticatedContext("operator-1", {role: "operator"})

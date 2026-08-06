@@ -966,9 +966,19 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
 - Verificacion visual: produccion se reviso con una sesion real sin escribir
   datos. Macroarea, proceso y equipo aparecieron de forma dependiente; cambiar
   macroarea limpio los niveles inferiores. No hubo errores de consola.
-- Pendiente: publicar el APK build 8 y actualizar el aviso remoto; instalar el
-  workflow privado e issue de fugas; seleccionar el libro de OneDrive y crear
-  el flujo Power Automate con el Office Script preparado.
+- GitHub privado: se creo el issue `#2`, se integro el exportador al workflow
+  horario existente y se agrego un disparo limitado a cambios del propio
+  workflow. La primera ejecucion real publico un lote `ready` con 2 reportes
+  historicos; no se consultara nuevamente Firestore hasta recibir el acuse de
+  Excel.
+- Compatibilidad: las reglas de produccion aceptan temporalmente creaciones de
+  fugas con esquema 1 durante la distribucion de Android. El esquema 2 conserva
+  todas las validaciones jerarquicas y de identificacion automatica.
+- Commit fuente principal: `6f5abe2`.
+- Pendiente: publicar el APK build 8 y actualizar el aviso remoto; seleccionar
+  el libro de OneDrive y crear el flujo Power Automate con el Office Script
+  preparado. El primer lote incluye 2 reportes historicos de prueba, por lo que
+  Jeff debe decidir si se importan o se excluyen antes del primer acuse.
 
 ## Plantilla para futuras entradas
 

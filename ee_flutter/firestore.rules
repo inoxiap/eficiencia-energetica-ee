@@ -230,11 +230,21 @@ service cloud.firestore {
       allow create: if createsOwnRecord()
         && request.resource.data.sectionId is string
         && request.resource.data.equipmentName is string
-        && validLeakDestination()
-        && request.resource.data.leakType
-          in ['steam', 'condensate', 'oil', 'water', 'air']
-        && request.resource.data.leakNumber is int
-        && request.resource.data.leakNumber > 0
+        && (
+          (
+            request.resource.data.schemaVersion == 1
+            && request.resource.data.leakType
+              in ['steam', 'oil', 'water', 'air']
+          )
+          || (
+            request.resource.data.schemaVersion >= 2
+            && validLeakDestination()
+            && request.resource.data.leakType
+              in ['steam', 'condensate', 'oil', 'water', 'air']
+            && request.resource.data.leakNumber is int
+            && request.resource.data.leakNumber > 0
+          )
+        )
         && request.resource.data.tagNumber is string
         && request.resource.data.tagNumber.size() > 0
         && request.resource.data.photoProvider == 'cloudinary'

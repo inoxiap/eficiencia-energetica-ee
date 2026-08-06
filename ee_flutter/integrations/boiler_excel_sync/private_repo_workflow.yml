@@ -1,6 +1,11 @@
 name: Sincronizar datos de eficiencia con Excel
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/sync-boiler-excel.yml"
   workflow_dispatch:
     inputs:
       payload_date:
