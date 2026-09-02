@@ -43,8 +43,11 @@ del delta.
 Para Alfa Laval, la interfaz usa las unidades que ve el usuario en los
 contadores:
 
-- Bunker: litros. El valor normalizado se guarda en galones como
-  `gal = litros / 3.79`.
+- Bunker: desde el cambio de flujometro identificado el 19 de agosto de 2026 a
+  las 18:03 (America/Guayaquil), el contador se ingresa directamente en
+  galones. No se aplica conversion.
+- Bunker historico anterior al cambio: el contador se ingresaba en litros y el
+  valor normalizado se conserva como `gal = litros / 3.79`.
 - Agua: unidades del contador, donde cada unidad representa 10 litros. El valor
   normalizado se guarda como `gal = unidades x 2.64`.
 - Vapor: kilogramos (`kg`), sin conversion adicional.
@@ -52,10 +55,18 @@ contadores:
 La equivalencia fisica exacta es 1 galon estadounidense =
 3.785411784 litros; por eso 10 litros equivalen a 2.64172 galones. La app usa
 los factores operativos redondeados 3.79 y 2.64 confirmados para los medidores
-de planta. Guarda tanto el valor original y su unidad como el valor normalizado
-de bunker y agua en galones. El vapor conserva el valor acumulado original en
-kilogramos. Distral 900 y Cleaver Brooks mantienen sus lecturas habilitadas en
-galones y no solicitan vapor.
+historicos de planta. El factor 3.79 ya no se usa en capturas nuevas de bunker
+de Alfa Laval; el factor 2.64 de agua no cambia. La app guarda tanto el valor
+original y su unidad como el valor normalizado. El vapor conserva el valor
+acumulado original en kilogramos. Distral 900 y Cleaver Brooks mantienen sus
+lecturas habilitadas en galones y no solicitan vapor.
+
+Entre el cambio fisico del flujometro y la version 1.5.0, 49 lecturas quedaron
+declaradas como litros aunque el nuevo equipo ya mostraba galones. La app, el
+dashboard y el exportador las reconocen por caldera, fecha y entrada original,
+y recuperan el valor directo con la marca
+`alfa_bunker_direct_gal_2026_08_19_v1`. Los documentos originales de Firestore
+no se reescriben.
 
 ### Advertencias de rango historico
 

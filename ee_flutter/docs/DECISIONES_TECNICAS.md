@@ -67,6 +67,12 @@ Alfa Laval se guarda en kilogramos (`kg`). Todas las lecturas nuevas se crean
 como `cumulative_meter`. El soporte para `interval_consumption` permanece solo
 al leer documentos historicos.
 
+Desde el 19 de agosto de 2026 a las 18:03, el nuevo flujometro de bunker de
+Alfa Laval entrega galones directamente. La version 1.5.0 elimina la conversion
+entre litros y galones para capturas nuevas y mantiene una correccion de lectura
+compatible para los 49 registros posteriores al cambio que fueron guardados por
+versiones anteriores. Las lecturas previas conservan su conversion original.
+
 ## Presiones de distribuidores
 
 El modulo de consumos usa una navegacion inferior con las vistas Consumos y

@@ -121,6 +121,57 @@ class ExporterTests(unittest.TestCase):
         self.assertAlmostEqual(daily[0][13], 30)
         self.assertAlmostEqual(daily[0][14], 60)
 
+    def test_alfa_new_meter_readings_are_recovered_as_direct_gallons(self):
+        converted_by_old_app = reading_from_dict(
+            "alfa-new-meter",
+            {
+                "boilerId": "alfa_laval_1200",
+                "boilerName": "Caldera Alfa Laval 1200",
+                "recordedAt": "2026-08-19T23:03:00Z",
+                "bunkerValue": 575 / 3.79,
+                "bunkerUnit": "gal",
+                "waterValue": 200,
+                "waterUnit": "gal",
+                "originalInputs": {
+                    "bunker": {
+                        "value": 575,
+                        "unit": "L",
+                        "gallons": 575 / 3.79,
+                    }
+                },
+            },
+        )
+
+        self.assertEqual(converted_by_old_app.bunker_total_gal, 575)
+        self.assertEqual(converted_by_old_app.bunker_unit, "gal")
+        self.assertIn(
+            "alfa_bunker_direct_gal_2026_08_19_v1",
+            converted_by_old_app.warnings,
+        )
+
+    def test_alfa_old_meter_readings_keep_liter_conversion(self):
+        old_meter = reading_from_dict(
+            "alfa-old-meter",
+            {
+                "boilerId": "alfa_laval_1200",
+                "boilerName": "Caldera Alfa Laval 1200",
+                "recordedAt": "2026-08-19T22:59:00Z",
+                "bunkerValue": 1000,
+                "bunkerUnit": "gal",
+                "waterValue": 200,
+                "waterUnit": "gal",
+                "originalInputs": {
+                    "bunker": {"value": 3790, "unit": "L", "gallons": 1000}
+                },
+            },
+        )
+
+        self.assertEqual(old_meter.bunker_total_gal, 1000)
+        self.assertNotIn(
+            "alfa_bunker_direct_gal_2026_08_19_v1",
+            old_meter.warnings,
+        )
+
     def test_incremental_payload_keeps_changed_rows_and_full_affected_day(self):
         first = reading("a", "2026-07-24T05:30:00Z", 100, 200)
         second = reading("b", "2026-07-24T07:00:00Z", 130, 260)

@@ -201,35 +201,98 @@ void main() {
     expect(historical.toJson()['schemaVersion'], 1);
   });
 
-  test('schema 3 preserves original readings and conversion metadata', () {
-    final current = BoilerReading(
-      id: 'converted',
-      recordedAt: DateTime.utc(2026, 7, 27, 12),
-      createdAt: DateTime.utc(2026, 7, 27, 12),
-      boilerName: alfaLavalBoiler,
-      boilerId: boiler.id,
-      fuelTotal: alfaBunkerGallonsFromLiters(3790),
-      waterTotal: alfaWaterGallonsFromCounter(100),
-      steamTotal: 500,
-      boilerPressurePsi: 151,
-      originalInputs: const {
-        'bunker': {'value': 3790, 'unit': 'L'},
-        'water': {'value': 100, 'unit': 'counter_x10_L'},
+  test(
+    'current schema preserves original readings and conversion metadata',
+    () {
+      final current = BoilerReading(
+        id: 'converted',
+        recordedAt: DateTime.utc(2026, 7, 27, 12),
+        createdAt: DateTime.utc(2026, 7, 27, 12),
+        boilerName: alfaLavalBoiler,
+        boilerId: boiler.id,
+        fuelTotal: alfaBunkerGallonsFromLiters(3790),
+        waterTotal: alfaWaterGallonsFromCounter(100),
+        steamTotal: 500,
+        boilerPressurePsi: 151,
+        originalInputs: const {
+          'bunker': {'value': 3790, 'unit': 'L'},
+          'water': {'value': 100, 'unit': 'counter_x10_L'},
+        },
+        validationReferenceVersion: boilerSafetyReferenceVersion,
+        fuelConsumption: null,
+        waterConsumption: null,
+        steamConsumption: null,
+      );
+
+      final json = current.toJson();
+      final restored = BoilerReading.fromJson(json);
+
+      expect(json['schemaVersion'], boilerConsumptionSchemaVersion);
+      expect(restored.originalInputs['bunker']['value'], 3790);
+      expect(restored.originalInputs['water']['unit'], 'counter_x10_L');
+      expect(restored.validationReferenceVersion, boilerSafetyReferenceVersion);
+    },
+  );
+
+  test('Alfa readings after the meter change recover direct gallons', () {
+    final restored = BoilerReading.fromJson({
+      'id': 'alfa-new-meter',
+      'boilerId': 'alfa_laval_1200',
+      'boilerName': alfaLavalBoiler,
+      'recordedAt': '2026-08-19T23:03:00Z',
+      'createdAt': '2026-08-19T23:03:00Z',
+      'bunkerValue': 575 / alfaBunkerLitersPerGallon,
+      'bunkerUnit': 'gal',
+      'fuelConsumption': 75 / alfaBunkerLitersPerGallon,
+      'waterValue': 200,
+      'waterUnit': 'gal',
+      'originalInputs': {
+        'bunker': {
+          'value': 575,
+          'unit': 'L',
+          'gallons': 575 / alfaBunkerLitersPerGallon,
+        },
       },
-      validationReferenceVersion: boilerSafetyReferenceVersion,
-      fuelConsumption: null,
-      waterConsumption: null,
-      steamConsumption: null,
+    });
+
+    expect(restored.fuelTotal, 575);
+    expect(restored.fuelConsumption, closeTo(75, 0.0001));
+    expect(restored.originalInputs['bunker']['unit'], 'gal');
+    expect(restored.originalInputs['bunker']['legacyDeclaredUnit'], 'L');
+    expect(alfaBunkerMeterInputGallons(restored), 575);
+    expect(
+      restored.validationWarnings,
+      contains(alfaBunkerMeterCorrectionVersion),
     );
-
-    final json = current.toJson();
-    final restored = BoilerReading.fromJson(json);
-
-    expect(json['schemaVersion'], boilerConsumptionSchemaVersion);
-    expect(restored.originalInputs['bunker']['value'], 3790);
-    expect(restored.originalInputs['water']['unit'], 'counter_x10_L');
-    expect(restored.validationReferenceVersion, boilerSafetyReferenceVersion);
   });
+
+  test(
+    'Alfa readings before the meter change remain converted from liters',
+    () {
+      final restored = BoilerReading.fromJson({
+        'id': 'alfa-old-meter',
+        'boilerId': 'alfa_laval_1200',
+        'boilerName': alfaLavalBoiler,
+        'recordedAt': '2026-08-19T22:59:00Z',
+        'createdAt': '2026-08-19T22:59:00Z',
+        'bunkerValue': 1000,
+        'bunkerUnit': 'gal',
+        'waterValue': 200,
+        'waterUnit': 'gal',
+        'originalInputs': const {
+          'bunker': {'value': 3790, 'unit': 'L', 'gallons': 1000},
+        },
+      });
+
+      expect(restored.fuelTotal, 1000);
+      expect(restored.originalInputs['bunker']['unit'], 'L');
+      expect(alfaBunkerMeterInputGallons(restored), 1000);
+      expect(
+        restored.validationWarnings,
+        isNot(contains(alfaBunkerMeterCorrectionVersion)),
+      );
+    },
+  );
 
   test('current configuration preserves steam behavior for compatibility', () {
     expect(boilerByName(alfaLavalBoiler)?.readsSteam, isTrue);

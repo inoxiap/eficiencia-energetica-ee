@@ -5,6 +5,11 @@ from statistics import mean
 from typing import Any
 
 
+ALFA_BUNKER_DIRECT_GALLONS_CUTOVER_UTC = datetime(
+    2026, 8, 19, 23, tzinfo=timezone.utc
+)
+
+
 def number(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
@@ -67,6 +72,24 @@ def section_name(record: dict) -> str:
     )
 
 
+def normalized_bunker_total(record: dict, boiler_id: str) -> tuple[float | None, bool]:
+    stored = first_number(record, "bunkerValue", "fuelTotal")
+    recorded_at = timestamp(record.get("recordedAt"))
+    if recorded_at is not None and recorded_at.tzinfo is None:
+        recorded_at = recorded_at.replace(tzinfo=timezone.utc)
+    original_unit = nested(record, "originalInputs.bunker.unit")
+    direct_gallons = first_number(record, "originalInputs.bunker.value")
+    if (
+        boiler_id == "alfa_laval_1200"
+        and recorded_at is not None
+        and recorded_at >= ALFA_BUNKER_DIRECT_GALLONS_CUTOVER_UTC
+        and original_unit == "L"
+        and direct_gallons is not None
+    ):
+        return direct_gallons, True
+    return stored, False
+
+
 def validated_boiler_consumption(records: list[dict]) -> list[dict]:
     grouped: dict[str, list[dict]] = defaultdict(list)
     for record in records:
@@ -82,8 +105,12 @@ def validated_boiler_consumption(records: list[dict]) -> list[dict]:
         previous: dict[str, float | None] | None = None
         raw_history: list[dict[str, float | None]] = []
         for item in items:
+            bunker_total, bunker_was_corrected = normalized_bunker_total(
+                item,
+                boiler,
+            )
             raw = {
-                "bunker": first_number(item, "bunkerValue", "fuelTotal"),
+                "bunker": bunker_total,
                 "water": first_number(item, "waterValue", "waterTotal"),
                 "steam": first_number(item, "steamValue", "steamTotal"),
             }
@@ -101,7 +128,11 @@ def validated_boiler_consumption(records: list[dict]) -> list[dict]:
                 )
                 if mode == "interval_consumption":
                     values[metric] = raw[metric]
-                elif explicit is not None and explicit >= 0:
+                elif (
+                    explicit is not None
+                    and explicit >= 0
+                    and not (metric == "bunker" and bunker_was_corrected)
+                ):
                     values[metric] = explicit
                 elif previous is not None and raw[metric] is not None:
                     delta = raw[metric] - previous[metric] if previous[metric] is not None else None

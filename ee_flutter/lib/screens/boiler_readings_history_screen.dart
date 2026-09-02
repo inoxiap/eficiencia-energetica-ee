@@ -142,7 +142,7 @@ class _BoilerReadingsHistoryScreenState
                       'Las lecturas apareceran aqui despues de ser confirmadas en la nube.',
                 )
               else ...[
-                _ReadingsTable(readings: visibleReadings),
+                _ReadingsList(readings: visibleReadings),
                 if (visibleCount < selectedReadings.length) ...[
                   const SizedBox(height: 12),
                   SizedBox(
@@ -187,129 +187,144 @@ class _BoilerReadingsHistoryScreenState
   }
 }
 
-class _ReadingsTable extends StatelessWidget {
-  const _ReadingsTable({required this.readings});
+class _ReadingsList extends StatelessWidget {
+  const _ReadingsList({required this.readings});
 
   final List<BoilerReading> readings;
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 520;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        key: const Key('boiler-readings-table'),
-        headingRowColor: WidgetStatePropertyAll(
-          brandRed.withValues(alpha: 0.08),
-        ),
-        horizontalMargin: compact ? 4 : 10,
-        columnSpacing: compact ? 8 : 18,
-        dataRowMinHeight: compact ? 52 : 48,
-        dataRowMaxHeight: compact ? 58 : 56,
-        columns: [
-          DataColumn(
-            label: Text(
-              compact ? 'Fecha\ny hora' : 'Fecha y hora',
-              textAlign: TextAlign.center,
-            ),
+    return ListView.separated(
+      key: const Key('boiler-readings-list'),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: readings.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (context, index) => _ReadingRow(
+        key: Key('boiler-reading-row-$index'),
+        reading: readings[index],
+        index: index,
+      ),
+    );
+  }
+}
+
+class _ReadingRow extends StatelessWidget {
+  const _ReadingRow({required this.reading, required this.index, super.key});
+
+  final BoilerReading reading;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final bunker = _displayValue(reading, 'bunker');
+    final water = _displayValue(reading, 'water');
+    final steam = reading.steamTotal == null
+        ? const _ReadingValue('-', '')
+        : _displayValue(reading, 'steam');
+    final local = reading.recordedAt.toLocal();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.schedule, size: 18, color: brandRed),
+              const SizedBox(width: 7),
+              Text(
+                _date(local),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const Spacer(),
+              Text(
+                _time(local),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: mutedColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
-          DataColumn(label: Text('Bunker'), numeric: true),
-          DataColumn(label: Text('Agua'), numeric: true),
-          DataColumn(label: Text('Vapor'), numeric: true),
-        ],
-        rows: [
-          for (final reading in readings)
-            DataRow(
-              cells: [
-                DataCell(
-                  Text(
-                    compact
-                        ? _compactDate(reading.recordedAt)
-                        : Formats.date(reading.recordedAt),
-                    textAlign: TextAlign.center,
-                    style: compact ? const TextStyle(fontSize: 12) : null,
+          const SizedBox(height: 12),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _ReadingMetric(
+                    key: Key('boiler-reading-value-bunker-$index'),
+                    label: 'Bunker',
+                    readingValue: bunker,
                   ),
                 ),
-                DataCell(
-                  Text(
-                    _originalValue(reading, 'bunker', compact: compact),
-                    textAlign: TextAlign.center,
-                    style: compact ? const TextStyle(fontSize: 12) : null,
+                const VerticalDivider(width: 12),
+                Expanded(
+                  child: _ReadingMetric(
+                    key: Key('boiler-reading-value-water-$index'),
+                    label: 'Agua',
+                    readingValue: water,
                   ),
                 ),
-                DataCell(
-                  Text(
-                    _originalValue(reading, 'water', compact: compact),
-                    textAlign: TextAlign.center,
-                    style: compact ? const TextStyle(fontSize: 12) : null,
-                  ),
-                ),
-                DataCell(
-                  Text(
-                    reading.steamTotal == null
-                        ? '-'
-                        : _originalValue(reading, 'steam', compact: compact),
-                    textAlign: TextAlign.center,
-                    style: compact ? const TextStyle(fontSize: 12) : null,
+                const VerticalDivider(width: 12),
+                Expanded(
+                  child: _ReadingMetric(
+                    key: Key('boiler-reading-value-steam-$index'),
+                    label: 'Vapor',
+                    readingValue: steam,
                   ),
                 ),
               ],
             ),
+          ),
         ],
       ),
     );
   }
 
-  static String _originalValue(
-    BoilerReading reading,
-    String key, {
-    required bool compact,
-  }) {
+  static _ReadingValue _displayValue(BoilerReading reading, String key) {
     final original = reading.originalInputs[key];
     if (original is Map) {
       final value = _toDouble(original['value']);
       if (value != null) {
-        return _valueWithUnit(
-          value,
+        return _ReadingValue(
+          _formatNumber(value),
           key == 'steam'
               ? _friendlyUnit(reading.steamUnit)
               : _friendlyUnit('${original['unit'] ?? ''}'),
-          compact,
         );
       }
     }
     return switch (key) {
-      'bunker' => _valueWithUnit(
-        reading.fuelTotal,
+      'bunker' => _ReadingValue(
+        _formatNumber(reading.fuelTotal),
         _friendlyUnit(reading.bunkerUnit),
-        compact,
       ),
-      'water' => _valueWithUnit(
-        reading.waterTotal,
+      'water' => _ReadingValue(
+        _formatNumber(reading.waterTotal),
         _friendlyUnit(reading.waterUnit),
-        compact,
       ),
-      'steam' => _valueWithUnit(
-        reading.steamTotal ?? 0,
+      'steam' => _ReadingValue(
+        _formatNumber(reading.steamTotal ?? 0),
         _friendlyUnit(reading.steamUnit),
-        compact,
       ),
-      _ => '-',
+      _ => const _ReadingValue('-', ''),
     };
   }
 
-  static String _valueWithUnit(double value, String unit, bool compact) {
-    return '${_formatNumber(value)}${compact ? '\n' : ' '}$unit';
+  static String _date(DateTime value) {
+    final day = value.day.toString().padLeft(2, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    return '$day/$month/${value.year}';
   }
 
-  static String _compactDate(DateTime value) {
-    final local = value.toLocal();
-    final day = local.day.toString().padLeft(2, '0');
-    final month = local.month.toString().padLeft(2, '0');
-    final year = (local.year % 100).toString().padLeft(2, '0');
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '$day/$month/$year\n$hour:$minute';
+  static String _time(DateTime value) {
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
   }
 
   static double? _toDouble(Object? value) {
@@ -318,9 +333,7 @@ class _ReadingsTable extends StatelessWidget {
   }
 
   static String _formatNumber(double value) {
-    return value == value.roundToDouble()
-        ? Formats.noDecimal(value)
-        : Formats.two(value);
+    return Formats.noDecimal(value);
   }
 
   static String _friendlyUnit(String unit) {
@@ -331,4 +344,58 @@ class _ReadingsTable extends StatelessWidget {
       _ => unit,
     };
   }
+}
+
+class _ReadingMetric extends StatelessWidget {
+  const _ReadingMetric({
+    required this.label,
+    required this.readingValue,
+    super.key,
+  });
+
+  final String label;
+  final _ReadingValue readingValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: mutedColor,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 3),
+        SizedBox(
+          height: 28,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              readingValue.value,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 1),
+        Text(
+          readingValue.unit,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: mutedColor),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReadingValue {
+  const _ReadingValue(this.value, this.unit);
+
+  final String value;
+  final String unit;
 }

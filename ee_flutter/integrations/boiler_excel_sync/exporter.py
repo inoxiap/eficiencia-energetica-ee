@@ -15,6 +15,12 @@ from zoneinfo import ZoneInfo
 LOCAL_ZONE = ZoneInfo("America/Guayaquil")
 COLLECTION_NAME = "boiler_consumption_readings"
 SCHEMA_VERSION = 2
+ALFA_BUNKER_DIRECT_GALLONS_CUTOVER_UTC = datetime(
+    2026, 8, 19, 23, tzinfo=timezone.utc
+)
+ALFA_BUNKER_METER_CORRECTION_VERSION = (
+    "alfa_bunker_direct_gal_2026_08_19_v1"
+)
 BOILER_MASTER_NAMES = {
     "alfa_laval_1200": "CalAlfa",
     "distral_900": "900Distral",
@@ -147,6 +153,34 @@ def _as_int(value: Any, default: int) -> int:
         return default
 
 
+def _alfa_bunker_meter_value(
+    *,
+    boiler_id: str,
+    recorded_at: datetime,
+    data: dict[str, Any],
+) -> tuple[float | None, str, bool]:
+    stored_value = _as_float(data.get("bunkerValue", data.get("fuelTotal")))
+    stored_unit = str(data.get("bunkerUnit") or "")
+    original_inputs = data.get("originalInputs")
+    bunker_input = (
+        original_inputs.get("bunker")
+        if isinstance(original_inputs, dict)
+        else None
+    )
+    if not (
+        boiler_id == "alfa_laval_1200"
+        and recorded_at >= ALFA_BUNKER_DIRECT_GALLONS_CUTOVER_UTC
+        and isinstance(bunker_input, dict)
+        and bunker_input.get("unit") == "L"
+    ):
+        return stored_value, stored_unit, False
+
+    direct_gallons = _as_float(bunker_input.get("value"))
+    if direct_gallons is None:
+        return stored_value, stored_unit, False
+    return direct_gallons, "gal", True
+
+
 def reading_from_dict(document_id: str, data: dict[str, Any]) -> Reading:
     recorded_at = _as_datetime(data.get("recordedAt"))
     if recorded_at is None:
@@ -157,6 +191,19 @@ def reading_from_dict(document_id: str, data: dict[str, Any]) -> Reading:
     warnings = data.get("validationWarnings") or []
     if not isinstance(warnings, list):
         warnings = [str(warnings)]
+    warnings = [str(item) for item in warnings]
+    bunker_total_gal, bunker_unit, bunker_was_corrected = (
+        _alfa_bunker_meter_value(
+            boiler_id=boiler_id,
+            recorded_at=recorded_at,
+            data=data,
+        )
+    )
+    if (
+        bunker_was_corrected
+        and ALFA_BUNKER_METER_CORRECTION_VERSION not in warnings
+    ):
+        warnings.append(ALFA_BUNKER_METER_CORRECTION_VERSION)
     return Reading(
         document_id=document_id,
         boiler_id=boiler_id,
@@ -169,8 +216,8 @@ def reading_from_dict(document_id: str, data: dict[str, Any]) -> Reading:
         operator_name=str(data.get("createdByNameSnapshot") or ""),
         pressure_psi=_as_float(data.get("boilerPressurePsi")),
         pressure_unit=str(data.get("boilerPressureUnit") or "psi"),
-        bunker_total_gal=_as_float(data.get("bunkerValue", data.get("fuelTotal"))),
-        bunker_unit=str(data.get("bunkerUnit") or ""),
+        bunker_total_gal=bunker_total_gal,
+        bunker_unit=bunker_unit,
         water_total_gal=_as_float(data.get("waterValue", data.get("waterTotal"))),
         water_unit=str(data.get("waterUnit") or ""),
         steam_total_gal=_as_float(data.get("steamValue", data.get("steamTotal"))),
@@ -180,7 +227,7 @@ def reading_from_dict(document_id: str, data: dict[str, Any]) -> Reading:
         root_record_id=str(data.get("rootRecordId") or document_id),
         replaces_record_id=str(data.get("replacesRecordId") or ""),
         status=str(data.get("status") or ""),
-        warnings=tuple(str(item) for item in warnings),
+        warnings=tuple(warnings),
         notes=str(data.get("notes") or ""),
         app_version=str(data.get("appVersion") or ""),
         platform=str(data.get("platform") or ""),

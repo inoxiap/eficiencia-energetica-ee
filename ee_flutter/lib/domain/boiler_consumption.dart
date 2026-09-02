@@ -1,13 +1,23 @@
-const boilerConsumptionSchemaVersion = 3;
+const boilerConsumptionSchemaVersion = 4;
 const defaultBoilerPressureUnit = 'psi';
 const pendingUnit = 'pending_confirmation';
 const alfaBunkerLitersPerGallon = 3.79;
 const alfaWaterLitersPerCounterUnit = 10.0;
 const alfaWaterGallonsPerCounterUnit = 2.64;
 const boilerSafetyReferenceVersion = 'regist_inform_p99_2026_07_23_v1';
+const alfaBunkerMeterCorrectionVersion = 'alfa_bunker_direct_gal_2026_08_19_v1';
+final alfaBunkerDirectGallonsCutoverUtc = DateTime.utc(2026, 8, 19, 23);
 
 double alfaBunkerGallonsFromLiters(double liters) =>
     liters / alfaBunkerLitersPerGallon;
+
+double alfaBunkerMeterInputGallons(BoilerReading reading) {
+  final bunkerInput = _toStringDynamicMap(reading.originalInputs['bunker']);
+  if (bunkerInput['unit'] == 'gal') {
+    return _toDoubleOrNull(bunkerInput['value']) ?? reading.fuelTotal;
+  }
+  return reading.fuelTotal;
+}
 
 double alfaWaterGallonsFromCounter(double counterUnits) =>
     counterUnits * alfaWaterGallonsPerCounterUnit;
@@ -282,6 +292,32 @@ class BoilerReading {
     final steamUnit = boilerId == 'alfa_laval_1200' && storedSteamUnit == 'gal'
         ? 'kg'
         : storedSteamUnit;
+    final originalInputs = _toStringDynamicMap(json['originalInputs']);
+    final rawFuelTotal = _toDouble(json['bunkerValue'] ?? json['fuelTotal']);
+    final needsAlfaBunkerCorrection = _needsAlfaBunkerMeterCorrection(
+      boilerId: boilerId,
+      recordedAt: recorded,
+      originalInputs: originalInputs,
+    );
+    final correctedOriginalInputs = needsAlfaBunkerCorrection
+        ? _correctAlfaBunkerOriginalInputs(originalInputs)
+        : originalInputs;
+    final correctedFuelTotal = needsAlfaBunkerCorrection
+        ? _toDoubleOrNull(
+                _toStringDynamicMap(originalInputs['bunker'])['value'],
+              ) ??
+              rawFuelTotal
+        : rawFuelTotal;
+    final storedFuelConsumption = _toDoubleOrNull(
+      json['bunkerIntervalConsumption'] ?? json['fuelConsumption'],
+    );
+    final validationWarnings =
+        (json['validationWarnings'] as List?)?.whereType<String>().toList() ??
+        <String>[];
+    if (needsAlfaBunkerCorrection &&
+        !validationWarnings.contains(alfaBunkerMeterCorrectionVersion)) {
+      validationWarnings.add(alfaBunkerMeterCorrectionVersion);
+    }
     return BoilerReading(
       id: json['id'] as String? ?? '',
       recordedAt: recorded ?? DateTime.now(),
@@ -289,7 +325,7 @@ class BoilerReading {
       boilerName: boilerName,
       boilerId: boilerId,
       readingMode: json['readingMode'] as String? ?? 'cumulative_meter',
-      fuelTotal: _toDouble(json['bunkerValue'] ?? json['fuelTotal']),
+      fuelTotal: correctedFuelTotal,
       waterTotal: _toDouble(json['waterValue'] ?? json['waterTotal']),
       steamTotal: _toDoubleOrNull(json['steamValue'] ?? json['steamTotal']),
       operatorPin: json['operatorPin'] as String? ?? '',
@@ -306,19 +342,18 @@ class BoilerReading {
       revision: _toInt(json['revision']) ?? 1,
       replacesRecordId: json['replacesRecordId'] as String?,
       rootRecordId: json['rootRecordId'] as String?,
-      validationWarnings:
-          (json['validationWarnings'] as List?)?.whereType<String>().toList() ??
-          const [],
+      validationWarnings: validationWarnings,
       notes: json['notes'] as String? ?? '',
       status: json['status'] as String? ?? 'synced',
       createdByUid: json['createdByUid'] as String? ?? '',
       createdByNameSnapshot: json['createdByNameSnapshot'] as String? ?? '',
-      originalInputs: _toStringDynamicMap(json['originalInputs']),
+      originalInputs: correctedOriginalInputs,
       validationReferenceVersion:
           json['validationReferenceVersion'] as String? ?? '',
-      fuelConsumption: _toDoubleOrNull(
-        json['bunkerIntervalConsumption'] ?? json['fuelConsumption'],
-      ),
+      fuelConsumption:
+          needsAlfaBunkerCorrection && storedFuelConsumption != null
+          ? storedFuelConsumption * alfaBunkerLitersPerGallon
+          : storedFuelConsumption,
       waterConsumption: _toDoubleOrNull(
         json['waterIntervalConsumption'] ?? json['waterConsumption'],
       ),
@@ -327,6 +362,38 @@ class BoilerReading {
       ),
     );
   }
+}
+
+bool _needsAlfaBunkerMeterCorrection({
+  required String boilerId,
+  required DateTime? recordedAt,
+  required Map<String, dynamic> originalInputs,
+}) {
+  if (boilerId != 'alfa_laval_1200' ||
+      recordedAt == null ||
+      recordedAt.toUtc().isBefore(alfaBunkerDirectGallonsCutoverUtc)) {
+    return false;
+  }
+  final bunkerInput = _toStringDynamicMap(originalInputs['bunker']);
+  return bunkerInput['unit'] == 'L' &&
+      _toDoubleOrNull(bunkerInput['value']) != null;
+}
+
+Map<String, dynamic> _correctAlfaBunkerOriginalInputs(
+  Map<String, dynamic> originalInputs,
+) {
+  final corrected = Map<String, dynamic>.from(originalInputs);
+  final bunkerInput = _toStringDynamicMap(originalInputs['bunker']);
+  final value = _toDoubleOrNull(bunkerInput['value']);
+  final correctedBunkerInput = <String, dynamic>{
+    ...bunkerInput,
+    'unit': 'gal',
+    'legacyDeclaredUnit': bunkerInput['unit'] ?? 'L',
+    'unitCorrection': alfaBunkerMeterCorrectionVersion,
+  };
+  if (value != null) correctedBunkerInput['gallons'] = value;
+  corrected['bunker'] = correctedBunkerInput;
+  return corrected;
 }
 
 class BoilerConsumptionCalculator {

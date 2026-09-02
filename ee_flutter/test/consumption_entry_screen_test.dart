@@ -102,7 +102,7 @@ void main() {
     expect(find.text('Presion'), findsOneWidget);
     expect(find.text('151'), findsOneWidget);
     expect(find.text('Consumo del intervalo'), findsNothing);
-    expect(find.text('0000003790 L'), findsOneWidget);
+    expect(find.text('0000001000 gal'), findsOneWidget);
     expect(find.text('0000000800 x10 L'), findsOneWidget);
     expect(find.text('0000003000 kg'), findsOneWidget);
 
@@ -160,7 +160,7 @@ void main() {
     expect(find.text('Presiones guardadas correctamente.'), findsOneWidget);
   });
 
-  testWidgets('Alfa review shows liters and stores converted gallons', (
+  testWidgets('Alfa review uses direct bunker gallons and converts water', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(800, 2200));
@@ -183,10 +183,7 @@ void main() {
     await tester.tap(review);
     await tester.pumpAndSettle();
 
-    expect(
-      find.textContaining('Bunker: 3.790,00 L = 1.000,00 gal'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Bunker: 1.000 (gal)'), findsOneWidget);
     expect(
       find.textContaining('Agua: 8.000,00 L = 2.112,00 gal'),
       findsOneWidget,
@@ -199,6 +196,10 @@ void main() {
     expect(consumptionStore.savedReading!.fuelTotal, closeTo(1000, 0.0001));
     expect(consumptionStore.savedReading!.waterTotal, closeTo(2112, 0.0001));
     expect(consumptionStore.savedReading!.steamUnit, 'kg');
+    expect(
+      consumptionStore.savedReading!.originalInputs['bunker']['unit'],
+      'gal',
+    );
     expect(
       consumptionStore.savedReading!.originalInputs['water']['unit'],
       'counter_x10_L',

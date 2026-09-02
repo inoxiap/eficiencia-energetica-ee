@@ -36,6 +36,37 @@ def test_cumulative_readings_use_positive_deltas_only():
     assert values[2]["water"] is None
 
 
+def test_alfa_new_meter_uses_direct_gallons_after_cutover():
+    records = [
+        {
+            "boilerId": "alfa_laval_1200",
+            "recordedAt": datetime(2026, 8, 19, 23, 3, tzinfo=timezone.utc),
+            "readingMode": "cumulative_meter",
+            "bunkerValue": 575 / 3.79,
+            "waterValue": 200,
+            "originalInputs": {
+                "bunker": {"value": 575, "unit": "L"},
+            },
+        },
+        {
+            "boilerId": "alfa_laval_1200",
+            "recordedAt": datetime(2026, 8, 20, 0, 3, tzinfo=timezone.utc),
+            "readingMode": "cumulative_meter",
+            "bunkerValue": 650 / 3.79,
+            "fuelConsumption": 75 / 3.79,
+            "waterValue": 225,
+            "originalInputs": {
+                "bunker": {"value": 650, "unit": "L"},
+            },
+        },
+    ]
+
+    values = validated_boiler_consumption(records)
+
+    assert values[0]["bunker"] is None
+    assert values[1]["bunker"] == 75
+
+
 def test_dashboard_keeps_kw_and_kwh_separate():
     start = datetime(2026, 7, 1, tzinfo=timezone.utc)
     end = start + timedelta(days=1)

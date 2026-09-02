@@ -2255,14 +2255,12 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
                   ),
                   const SizedBox(height: 14),
                   _buildConsumptionOdometer(
-                    label: _isAlfaLaval
-                        ? 'Lectura acumulada de bunker'
-                        : 'Lectura acumulada de bunker',
+                    label: 'Lectura acumulada de bunker',
                     helper: _isAlfaLaval
-                        ? 'El medidor se lee directamente en litros.'
+                        ? 'El medidor nuevo se lee directamente en galones.'
                         : 'Lectura acumulada del medidor en galones.',
                     value: _fuelInputValue,
-                    unit: _isAlfaLaval ? 'L' : 'gal',
+                    unit: 'gal',
                     keyPrefix: 'consumption-bunker',
                     onChanged: (value) =>
                         setState(() => _fuelInputValue = value),
@@ -2490,20 +2488,13 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
     }
     final fuelInput = _fuelInputValue.toDouble();
     final waterInput = _waterInputValue.toDouble();
-    final fuelTotal = _isAlfaLaval
-        ? alfaBunkerGallonsFromLiters(fuelInput)
-        : fuelInput;
+    final fuelTotal = fuelInput;
     final waterTotal = _isAlfaLaval
         ? alfaWaterGallonsFromCounter(waterInput)
         : waterInput;
     final steamTotal = boiler.readsSteam ? _steamInputValue.toDouble() : null;
     final originalInputs = <String, dynamic>{
-      'bunker': {
-        'value': fuelInput,
-        'unit': _isAlfaLaval ? 'L' : 'gal',
-        'gallons': fuelTotal,
-        if (_isAlfaLaval) 'litersPerGallon': alfaBunkerLitersPerGallon,
-      },
+      'bunker': {'value': fuelInput, 'unit': 'gal', 'gallons': fuelTotal},
       'water': {
         'value': waterInput,
         'unit': _isAlfaLaval ? 'counter_x10_L' : 'gal',
@@ -2687,11 +2678,8 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
                   '(${Formats.one(reading.boilerPressurePsi! / _psiPerBar)} bar)',
                 ),
                 Text(
-                  _isAlfaLaval
-                      ? 'Bunker: ${Formats.two(_fuelInputValue.toDouble())} L = '
-                            '${Formats.two(reading.fuelTotal)} gal'
-                      : 'Bunker: ${Formats.two(reading.fuelTotal)} '
-                            '(${_unitLabel(reading.bunkerUnit)})',
+                  'Bunker: ${Formats.noDecimal(reading.fuelTotal)} '
+                  '(${_unitLabel(reading.bunkerUnit)})',
                 ),
                 Text(
                   _isAlfaLaval
@@ -2829,10 +2817,7 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
       return;
     }
     if (_isAlfaLaval) {
-      _fuelInputValue =
-          (_originalInputValue(reading, 'bunker') ??
-                  reading.fuelTotal * alfaBunkerLitersPerGallon)
-              .round();
+      _fuelInputValue = alfaBunkerMeterInputGallons(reading).round();
       _waterInputValue =
           (_originalInputValue(reading, 'water') ??
                   reading.waterTotal / alfaWaterGallonsPerCounterUnit)

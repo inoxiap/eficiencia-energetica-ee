@@ -86,15 +86,21 @@ void main() {
 
     expect(find.text('Caldera Cleaver Brooks 1200'), findsOneWidget);
     expect(find.text('Mostrando 15 de 18.'), findsOneWidget);
-    expect(find.text('5.014 gal'), findsOneWidget);
-    expect(find.text('5.015 gal'), findsNothing);
+    expect(find.text('5.014'), findsOneWidget);
+    expect(find.text('5.015'), findsNothing);
+    expect(find.byKey(const Key('boiler-readings-list')), findsOneWidget);
+    final displayedValue = tester.widget<Text>(find.text('5.014'));
+    expect(displayedValue.style?.fontSize, greaterThanOrEqualTo(20));
     expect(find.byKey(const Key('load-more-boiler-readings')), findsOneWidget);
 
+    await tester.ensureVisible(
+      find.byKey(const Key('load-more-boiler-readings')),
+    );
     await tester.tap(find.byKey(const Key('load-more-boiler-readings')));
     await tester.pumpAndSettle();
 
     expect(find.text('Mostrando 18 de 18.'), findsOneWidget);
-    expect(find.text('5.017 gal'), findsOneWidget);
+    expect(find.text('5.017'), findsOneWidget);
     expect(find.byKey(const Key('load-more-boiler-readings')), findsNothing);
   });
 }

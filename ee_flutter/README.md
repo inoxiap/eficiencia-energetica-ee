@@ -115,6 +115,11 @@ cada caldera se guarda con su lectura acumulada en
 `boiler_consumption_readings`; las presiones de distribuidores se guardan en
 `steam_pressure_readings`.
 
+El bunker de Alfa Laval se ingresa directamente en galones desde el cambio de
+flujometro del 19 de agosto de 2026. La compatibilidad conserva la conversion
+historica de litros y corrige al leer los registros capturados con el nuevo
+medidor antes de la version 1.5.0.
+
 ## Excel de consumos de calderas
 
 `integrations/boiler_excel_sync/` contiene el exportador que convierte las
