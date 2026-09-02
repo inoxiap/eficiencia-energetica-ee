@@ -13,6 +13,7 @@ from exporter import (
     build_daily_summaries,
     build_intervals,
     build_power_automate_payload,
+    cursor_end_for_publication,
     delivery_remaining_dates,
     delivery_status,
     load_github_issue_payload,
@@ -295,6 +296,27 @@ class ExporterTests(unittest.TestCase):
         self.assertEqual(
             payload["delivery"]["cursorEndUtc"],
             "2026-07-27T18:00:00+00:00",
+        )
+
+    def test_explicit_backfill_preserves_acknowledged_cursor(self):
+        acknowledged = datetime(2026, 9, 2, 0, 3, tzinfo=timezone.utc)
+        historical = datetime(2026, 8, 20, 3, 3, tzinfo=timezone.utc)
+
+        self.assertEqual(
+            cursor_end_for_publication(
+                acknowledged_cursor=acknowledged,
+                queued_cursor_end=historical,
+                explicit_backfill=True,
+            ),
+            acknowledged,
+        )
+        self.assertEqual(
+            cursor_end_for_publication(
+                acknowledged_cursor=acknowledged,
+                queued_cursor_end=historical,
+                explicit_backfill=False,
+            ),
+            historical,
         )
 
     @patch.dict(

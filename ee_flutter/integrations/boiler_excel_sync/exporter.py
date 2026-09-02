@@ -1325,6 +1325,18 @@ def acknowledged_cursor_utc(
     return parsed.astimezone(timezone.utc)
 
 
+def cursor_end_for_publication(
+    *,
+    acknowledged_cursor: datetime | None,
+    queued_cursor_end: datetime | None,
+    explicit_backfill: bool,
+) -> datetime | None:
+    """Keep the incremental cursor stable during an explicit date backfill."""
+    if explicit_backfill:
+        return acknowledged_cursor
+    return queued_cursor_end
+
+
 def payload_size_chars(payload: dict[str, Any]) -> int:
     return len(
         json.dumps(
@@ -1417,6 +1429,11 @@ def main() -> None:
     queued_cursor_end = (
         delivery_cursor_end_utc(issue_payload) if queued_dates else None
     )
+    publication_cursor_end = cursor_end_for_publication(
+        acknowledged_cursor=acknowledged_cursor,
+        queued_cursor_end=queued_cursor_end,
+        explicit_backfill=args.payload_date is not None,
+    )
     changed_since_utc = (
         None
         if args.full_payload or target_local_date is not None
@@ -1439,7 +1456,7 @@ def main() -> None:
             changed_since_utc=changed_since_utc,
             target_local_date=target_local_date,
             cursor_start_utc=acknowledged_cursor,
-            cursor_end_utc=queued_cursor_end,
+            cursor_end_utc=publication_cursor_end,
             remaining_dates=remaining_dates,
         )
         if not payload["datasets"]["raw"]["rows"]:
