@@ -16,7 +16,7 @@ o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
   `https://github.com/inoxiap/eficiencia-energetica-ee.git`
 - Rama principal: `main`.
 - Aplicacion activa: `ee_flutter/`.
-- Version Flutter registrada: `1.4.0+8`.
+- Version Flutter registrada: `1.5.0+9`.
 - La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
   historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
 
@@ -67,8 +67,8 @@ necesitar criterio tecnico avanzado para completar un levantamiento.
 - Web/PWA:
   `https://eficiencia-energetica-ee.web.app`
 - Android vigente:
-  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/tag/v1.4.0`.
-- `app_config/mobile_app` anuncia `1.4.0+8` con actualizacion opcional y URL
+  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/tag/v1.5.0`.
+- `app_config/mobile_app` anuncia `1.5.0+9` con actualizacion opcional y URL
   directa al APK firmado.
 - Firebase Hosting publica `ee_flutter/build/web`.
 - El proveedor Firebase Authentication Email/Password fue habilitado y probado
@@ -1036,6 +1036,51 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
 - Archivos principales:
   `ee_flutter/integrations/leak_excel_sync/office_script.ts` y
   `ee_flutter/integrations/leak_excel_sync/README.md`.
+
+### 2026-09-01 - Nuevo flujometro Alfa Laval y version 1.5.0
+
+- Solicitud: adaptar el bunker de Alfa Laval al nuevo flujometro que entrega
+  galones directamente y mejorar la lectura visual del historico de consumos.
+- Analisis: se revisaron 283 lecturas Alfa del Excel maestro. La ultima lectura
+  compatible con el medidor anterior fue el 19 de agosto de 2026 a las 12:01;
+  la primera del medidor nuevo fue a las 18:03, documento
+  `alfa_laval_1200_2026081923`. El valor original fue 575 y el cliente anterior
+  lo guardo como 151,715 gal, coincidencia exacta con `575 / 3.79`.
+- Alcance historico: se identificaron 49 lecturas afectadas desde el 19 hasta
+  el 31 de agosto de 2026. La mediana posterior almacenada era 76,079 gal/h y
+  al recuperar el valor directo queda en 288,339 gal/h, rango coherente con el
+  historico anterior.
+- Compatibilidad: desde el corte `2026-08-19T23:00:00Z`, los registros Alfa que
+  conservan `originalInputs.bunker.unit: L` se interpretan usando el valor
+  original como galones. La marca tecnica es
+  `alfa_bunker_direct_gal_2026_08_19_v1`. Registros anteriores conservan
+  `litros / 3.79`; agua mantiene `unidades x 2.64` y vapor permanece en kg. No
+  se reescribieron documentos de Firestore.
+- Captura nueva: Alfa Laval muestra galones en el hodometro, guarda el valor
+  acumulado sin conversion y usa esquema 4. El ultimo valor cargado se precarga
+  ya corregido incluso si fue creado por una version anterior.
+- Historico: se reemplazo la tabla horizontal por filas responsivas con fecha y
+  hora separadas, tres columnas estables para bunker/agua/vapor, valores grandes
+  con cifras tabulares, unidades visibles y redondeo sin decimales.
+- Integraciones: la misma interpretacion se agrego al dashboard y al exportador
+  de calderas. El payload hacia Office Script conserva esquema 2 para no romper
+  Power Automate. Pendiente operativo: reprocesar en Excel los dias historicos
+  afectados; las nuevas exportaciones ya salen corregidas.
+- Pruebas: `flutter analyze --no-pub` sin hallazgos; 53 pruebas Flutter, 16 del
+  exportador y 8 del dashboard aprobadas. Builds release web y Android
+  correctos. APK firmado con esquema v2, 56.079.533 bytes y SHA-256
+  `46566433A3CB4778E0D69F7AB9FA3F846272B2D35DDBBDE8916F9D72637CDBA3`.
+- Verificacion visual: web en escritorio y 390x844, ademas del Pixel 8 API 30,
+  sin desbordamientos ni errores de consola. En produccion se revisaron 15 de
+  44 lecturas reales Alfa: valores grandes, redondeados y unidades correctas.
+- Despliegue: web publicada en
+  `https://eficiencia-energetica-ee.web.app`; APK publicado en
+  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/download/v1.5.0/eficiencia-energetica-ee-1.5.0-build9.apk`.
+  `app_config/mobile_app` anuncia build 9 para Android y web, actualizacion no
+  forzada. Un Pixel con `1.4.0+8` mostro correctamente el dialogo hacia
+  `1.5.0+9`.
+- GitHub: commit fuente `c672ebd`; workflow de publicacion Android
+  `33588752765` completado correctamente y rama temporal eliminada.
 
 ## Plantilla para futuras entradas
 
