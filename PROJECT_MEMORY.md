@@ -67,8 +67,8 @@ necesitar criterio tecnico avanzado para completar un levantamiento.
 - Web/PWA:
   `https://eficiencia-energetica-ee.web.app`
 - Android vigente:
-  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/tag/v1.5.0`.
-- `app_config/mobile_app` anuncia `1.5.0+9` con actualizacion opcional y URL
+  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/tag/v1.6.0`.
+- `app_config/mobile_app` anuncia `1.6.0+10` con actualizacion opcional y URL
   directa al APK firmado.
 - Firebase Hosting publica `ee_flutter/build/web`.
 - El proveedor Firebase Authentication Email/Password fue habilitado y probado
@@ -1114,8 +1114,11 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   MB. La web productiva se verifico con sesion real sin crear documentos.
 - Despliegue: reglas, indices y Hosting publicados en
   `https://eficiencia-energetica-ee.web.app`. Version Flutter `1.6.0+10`.
-- Pendiente: publicar el APK 1.6.0 y anunciar build 10 en `app_config`; cargar
-  el inventario real cuando se entregue el archivo y se asigne propietario.
+- Android: release `v1.6.0` publicado y verificado por HTTP 200, con APK de
+  59.391.299 bytes. `app_config/mobile_app` anuncia build 10 y actualizacion
+  opcional. Workflow `34839800508` completo correctamente.
+- Pendiente: cargar el inventario real cuando se entregue el archivo y se
+  asigne propietario.
 
 ### 2026-09-14 - Reproceso historico Alfa Laval
 
