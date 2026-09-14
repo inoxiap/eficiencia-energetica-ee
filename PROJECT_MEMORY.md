@@ -1117,6 +1117,11 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
 - Android: release `v1.6.0` publicado y verificado por HTTP 200, con APK de
   59.391.299 bytes. `app_config/mobile_app` anuncia build 10 y actualizacion
   opcional. Workflow `34839800508` completo correctamente.
+- Android verificado: Pixel 8 API 30 mostro el aviso desde `1.1.1+4` hacia
+  `1.6.0+10`; despues se instalo el build 10 y se comprobo visualmente la
+  pantalla principal, el acceso protegido y las dos pestanas del modulo. El AVD
+  API 35 no tenia espacio suficiente, por lo que la prueba final uso API 30 con
+  renderizado por software.
 - Pendiente: cargar el inventario real cuando se entregue el archivo y se
   asigne propietario.
 
