@@ -213,7 +213,7 @@ Documento users/{uid}:
     id: uid
     displayName
     nationalId
-    role: operator | admin
+    role: operator | provider | admin
     active
     createdAt
     updatedAt
@@ -221,6 +221,31 @@ Documento users/{uid}:
 
 No contiene PIN. La cedula se conserva como texto, pero no se usa como ID del
 documento. Registro publico nunca asigna admin.
+
+## steam_trap_records
+
+Inventario fisico y levantamientos de trampas de vapor. Es independiente de
+`steam_trap_sizing_reports`, que conserva los calculos de dimensionamiento.
+
+Campos consultables:
+
+    id, tag, ownerUid
+    sectionCode, sectionId, sectionNameSnapshot
+    equipmentName, equipmentNameNormalized, zone
+    serviceId, trapTypeId, diameter
+    diagnosisStatus, entryMode, status
+    createdAt, updatedAt
+
+Evidencias estructuradas:
+
+    closePhoto: type, url, publicId, fileName, uploadedAt, ownerUid, tag
+    generalPhoto: type, url, publicId, fileName, uploadedAt, ownerUid, tag
+
+Cada TAG usa `TV-{sectionCode}-{consecutivo}`. El documento mantiene un ID
+interno distinto del TAG y el consecutivo por seccion vive en
+`steam_trap_counters/{sectionCode}`. Los estados admitidos son `draft`,
+`complete` y `upload_failed`. Una correccion administrativa de seccion conserva
+el TAG original y agrega una entrada a `sectionHistory`.
 
 ## user_private_credentials
 

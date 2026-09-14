@@ -139,6 +139,26 @@ operativos nunca deben publicarse en el repositorio publico del codigo. La
 configuracion completa y los secretos requeridos estan documentados en
 `integrations/boiler_excel_sync/README.md`.
 
+## Inventario de trampas de vapor
+
+`Ingreso Trampas de vapor` es independiente del calculador de dimensionamiento.
+Requiere sesion y contiene exactamente dos vistas: `Ingresar trampa` y
+`Consulta`. Permite reservar TAG por seccion, guardar borradores, cargar una
+foto cercana y otra general en Cloudinary, y exportar los registros autorizados
+a XLSX, ZIP de fotografias o un ZIP combinado.
+
+Los proveedores solo consultan registros propios por reglas de Firestore. El
+rol `admin` puede consultar el conjunto completo. Para validar el inventario sin
+escribir:
+
+    cd functions
+    set IMPORT_OWNER_UID=uid_asignado
+    set IMPORT_OWNER_NAME=nombre_asignado
+    npm run import:steam-traps -- inventario.json
+
+La escritura exige agregar `--commit`. El script usa credenciales del entorno
+administrativo; nunca se deben guardar cuentas de servicio en el repositorio.
+
 ## Documentacion
 
 - docs/AUDITORIA_TECNICA.md

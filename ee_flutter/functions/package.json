@@ -10,7 +10,8 @@
     "test": "vitest run test/credentials.test.ts",
     "test:rules": "vitest run test/firestore.rules.test.ts",
     "sanitize:pins": "node scripts/sanitize-legacy-pins.mjs",
-    "set:admin": "node scripts/set-admin.mjs"
+    "set:admin": "node scripts/set-admin.mjs",
+    "import:steam-traps": "node scripts/import-steam-traps.mjs"
   },
   "dependencies": {
     "argon2": "^0.41.1",

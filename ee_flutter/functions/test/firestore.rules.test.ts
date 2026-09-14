@@ -146,6 +146,43 @@ function boilerReading(uid: string, mode = "cumulative_meter") {
   };
 }
 
+function steamTrapRecord(uid: string) {
+  return {
+    id: "steam-trap-1",
+    tag: "TV-15-001",
+    tagLocked: true,
+    sectionCode: "15",
+    sectionId: "margarina",
+    sectionNameSnapshot: "Margarina",
+    zone: "",
+    equipmentName: "",
+    equipmentNameNormalized: "",
+    serviceId: "",
+    serviceNameSnapshot: "",
+    diameter: "",
+    trapTypeId: "",
+    trapTypeNameSnapshot: "",
+    condensateRecovery: "",
+    comments: "",
+    diagnosisStatus: "pending",
+    entryMode: "new_entry",
+    status: "draft",
+    photoProvider: "cloudinary",
+    ownerUid: uid,
+    ownerNameSnapshot: "Proveedor Uno",
+    createdAt: serverTimestamp(),
+    createdByUid: uid,
+    createdByNameSnapshot: "Proveedor Uno",
+    updatedAt: serverTimestamp(),
+    updatedByUid: uid,
+    appVersion: "1.6.0+10",
+    platform: "web",
+    schemaVersion: 1,
+    source: "manual",
+    sectionHistory: [],
+  };
+}
+
 describe("Firestore rules", () => {
   it("allows public app update configuration reads", async () => {
     await environment.withSecurityRulesDisabled(async (context) => {
@@ -379,6 +416,55 @@ describe("Firestore rules", () => {
           "boiler_consumption_readings/alfa_laval_1200_2026072415",
         ),
       ),
+    );
+  });
+
+  it("isolates physical steam-trap records by owner", async () => {
+    const provider = environment
+      .authenticatedContext("provider-1", {role: "provider"})
+      .firestore();
+    const reference = doc(provider, "steam_trap_records/steam-trap-1");
+    await assertSucceeds(setDoc(reference, steamTrapRecord("provider-1")));
+    await assertSucceeds(getDoc(reference));
+
+    const other = environment
+      .authenticatedContext("provider-2", {role: "provider"})
+      .firestore();
+    await assertFails(
+      getDoc(doc(other, "steam_trap_records/steam-trap-1")),
+    );
+    await assertFails(
+      updateDoc(doc(other, "steam_trap_records/steam-trap-1"), {
+        comments: "Intento ajeno",
+        updatedAt: serverTimestamp(),
+        updatedByUid: "provider-2",
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(reference, {
+        comments: "Revision propia",
+        updatedAt: serverTimestamp(),
+        updatedByUid: "provider-1",
+      }),
+    );
+  });
+
+  it("allows admins to read all steam-trap records", async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "steam_trap_records/steam-trap-1"),
+        {
+          ...steamTrapRecord("provider-1"),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      );
+    });
+    const admin = environment
+      .authenticatedContext("admin-1", {role: "admin"})
+      .firestore();
+    await assertSucceeds(
+      getDoc(doc(admin, "steam_trap_records/steam-trap-1")),
     );
   });
 

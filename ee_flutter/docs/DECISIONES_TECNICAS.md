@@ -117,3 +117,16 @@ workflow privado usa el `GITHUB_TOKEN` automatico de su propio repositorio con
 permiso exclusivo de escritura de issues; no necesita un token personal. El
 Office Script usa claves estables para crear o actualizar, conserva un mapa de
 filas y no sobrescribe conflictos historicos no administrados.
+
+## Inventario fisico de trampas
+
+El inventario usa `steam_trap_records` y no reutiliza
+`steam_trap_sizing_reports`: un registro describe una trampa instalada y el
+segundo conserva un resultado de calculo. La navegacion se limita a dos
+destinos; `Nueva` y `Validar inventario` son modos del formulario.
+
+El TAG se reserva mediante una transaccion sobre un contador por seccion. Esto
+permite nombres como `TV-15-001_CERCA.jpg` y reintentos con el mismo documento
+interno. Los borradores admiten datos parciales; completar exige todos los
+campos obligatorios y ambas evidencias. Se conserva Cloudinary y se documenta
+la necesidad de URLs firmadas si se exige revocar el acceso directo a una foto.

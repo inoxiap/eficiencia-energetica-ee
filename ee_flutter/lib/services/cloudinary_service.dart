@@ -20,14 +20,19 @@ class CloudinaryService {
   Future<CloudinaryUpload> uploadEvidence({
     required Uint8List bytes,
     required String reportId,
+    String? fileName,
+    String? publicId,
   }) async {
     final request = http.MultipartRequest('POST', Uri.parse(endpoint));
     request.fields['upload_preset'] = uploadPreset;
+    if (publicId != null && publicId.trim().isNotEmpty) {
+      request.fields['public_id'] = publicId.trim();
+    }
     request.files.add(
       http.MultipartFile.fromBytes(
         'file',
         bytes,
-        filename: 'ee_evidencia_$reportId.jpg',
+        filename: fileName ?? 'ee_evidencia_$reportId.jpg',
       ),
     );
 
@@ -44,12 +49,12 @@ class CloudinaryService {
     }
 
     final secureUrl = payload['secure_url'] as String?;
-    final publicId = payload['public_id'] as String?;
-    if (secureUrl == null || publicId == null) {
+    final uploadedPublicId = payload['public_id'] as String?;
+    if (secureUrl == null || uploadedPublicId == null) {
       throw Exception('Cloudinary respondio sin URL segura o public ID.');
     }
 
-    return CloudinaryUpload(secureUrl: secureUrl, publicId: publicId);
+    return CloudinaryUpload(secureUrl: secureUrl, publicId: uploadedPublicId);
   }
 
   Map<String, dynamic> _decodeJson(String body) {

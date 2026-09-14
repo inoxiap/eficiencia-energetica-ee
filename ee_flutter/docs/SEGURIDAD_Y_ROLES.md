@@ -3,6 +3,8 @@
 ## Roles
 
 - operator: crea registros, consulta mantenimientos y actualiza su seguimiento.
+- provider: crea y edita sus levantamientos de trampas, y solo consulta o
+  exporta documentos cuyo `ownerUid` coincide con su sesion.
 - admin: lectura global para dashboard y autorizacion de revisiones.
 
 El registro publico nunca asigna admin.
@@ -45,6 +47,12 @@ y Secure en produccion, y revalida el rol admin en Firestore.
 
 Las reglas tienen pruebas con Firebase Emulator Suite.
 
+En `steam_trap_records`, las reglas exigen propietario para leer y editar. El
+TAG, ID, propietario y fecha de creacion son inmutables para cualquier cliente.
+Solo un administrador puede corregir la seccion dejando historial. Ningun
+cliente puede borrar registros o alterar consecutivos fuera de incrementos
+unitarios.
+
 ## Secretos
 
 Variables/secretos:
@@ -62,3 +70,9 @@ API keys y google-services.json identifican la app, pero no sustituyen reglas.
 El preset unsigned no contiene una clave privada, pero debe configurarse en
 Cloudinary con restricciones de formato, tamano y carpeta. El cliente registra
 provider=cloudinary, URL segura y public ID.
+
+Cloudinary conserva actualmente activos publicos con URL HTTPS. Firestore evita
+que un proveedor descubra URLs de otro proveedor, pero una URL ya conocida no
+queda protegida por reglas de Firebase. Para control estricto de descarga se
+requieren activos autenticados y URLs firmadas por un backend que mantenga el
+API secret fuera del cliente. Esto no requiere migrar de proveedor.

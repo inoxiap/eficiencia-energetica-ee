@@ -1,6 +1,6 @@
 # Memoria del proyecto: Eficiencia Energetica EE
 
-Ultima actualizacion: 2026-08-05
+Ultima actualizacion: 2026-09-14
 
 Este documento es la memoria operativa persistente del proyecto. Debe leerse
 completo al iniciar o retomar cualquier tarea y actualizarse al terminar cambios
@@ -16,7 +16,7 @@ o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
   `https://github.com/inoxiap/eficiencia-energetica-ee.git`
 - Rama principal: `main`.
 - Aplicacion activa: `ee_flutter/`.
-- Version Flutter registrada: `1.5.0+9`.
+- Version Flutter registrada: `1.6.0+10`.
 - La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
   historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
 
@@ -109,6 +109,7 @@ No almacenar secretos de Cloudinary en Git.
 8. Panel administrador legado dentro de Flutter.
 9. Dashboard administrador independiente en Python/HTML.
 10. Actualizacion semiautomatica Android mediante `app_config`.
+11. Inventario y levantamiento fotografico de trampas de vapor.
 
 ## Colecciones Firestore conocidas
 
@@ -120,6 +121,8 @@ No almacenar secretos de Cloudinary en Git.
 - `pump_energy_surveys`
 - `motor_reference_tables`
 - `app_config`
+- `steam_trap_records`
+- `steam_trap_counters`
 
 Los registros nuevos deben conservar entradas originales, unidades, resultado,
 usuario, timestamps de servidor, plataforma, version de app, version de esquema,
@@ -1081,6 +1084,45 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   `1.5.0+9`.
 - GitHub: commit fuente `c672ebd`; workflow de publicacion Android
   `33588752765` completado correctamente y rama temporal eliminada.
+
+### 2026-09-14 - Inventario fisico de trampas de vapor 1.6.0
+
+- Solicitud: crear un modulo para proveedores con solo las pestanas `Ingresar
+  trampa` y `Consulta`, dos fotografias, TAG automatico, borradores, propiedad
+  por usuario, filtros, exportaciones y preparacion para 209 trampas existentes.
+- Resultado: se creo `steam_trap_records` separado del calculador de
+  dimensionamiento. El TAG `TV-{seccion}-{consecutivo}` se reserva mediante
+  transaccion y contador por seccion; el ID Firestore es independiente y el TAG
+  permanece inmutable.
+- Interfaz: las fotos cercana y general aparecen primero. Completar exige todos
+  los datos obligatorios y ambas fotos; los borradores permiten captura parcial.
+  Consulta busca, filtra, ordena, pagina de 15 en 15 y exporta XLSX, ZIP de fotos
+  o un ZIP combinado.
+- Seguridad: proveedor u operador solo lee y edita `ownerUid` propio; admin lee
+  todo. Las reglas bloquean cambios de TAG, propietario, ID y fecha de creacion,
+  y toda eliminacion. Correcciones administrativas de seccion agregan historial.
+- Fotografias: se conservo Cloudinary con nombres basados en TAG. Se documento
+  que las URLs actuales son publicas y que acceso directo estricto requeriria
+  URLs firmadas por backend, sin migrar de proveedor.
+- Importacion: `functions/scripts/import-steam-traps.mjs` valida por defecto y
+  requiere `--commit`, credenciales administrativas del entorno y propietario
+  asignado. Es idempotente por identificador historico.
+- Catalogo: se formalizaron los codigos 01-13, 15 y 16; no existe seccion 14 ni
+  aparece NO OPERATIVOS.
+- Pruebas/builds: `flutter analyze` sin hallazgos; 56 pruebas Flutter y 15 de
+  reglas aprobadas; Functions compilo; web y APK release correctos. APK de 56,6
+  MB. La web productiva se verifico con sesion real sin crear documentos.
+- Despliegue: reglas, indices y Hosting publicados en
+  `https://eficiencia-energetica-ee.web.app`. Version Flutter `1.6.0+10`.
+- Pendiente: publicar el APK 1.6.0 y anunciar build 10 en `app_config`; cargar
+  el inventario real cuando se entregue el archivo y se asigne propietario.
+
+### 2026-09-14 - Reproceso historico Alfa Laval
+
+- Se corrigio el exportador para que reprocesar fechas historicas no retroceda
+  el cursor incremental y se agrego una prueba. Se reprocesaron mediante GitHub
+  Actions y Power Automate los dias 19, 20, 21, 28, 29, 30 y 31 de agosto de
+  2026, conservando el cursor operativo de septiembre. Commit `016ee26`.
 
 ## Plantilla para futuras entradas
 

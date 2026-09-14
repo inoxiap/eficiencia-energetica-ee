@@ -31,6 +31,74 @@ service cloud.firestore {
       return signedIn() && resource.data.createdByUid == request.auth.uid;
     }
 
+    function ownsSteamTrap() {
+      return signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    function validSteamTrapCore() {
+      return request.resource.data.id is string
+        && request.resource.data.tag is string
+        && request.resource.data.tag.matches('^TV-[0-9][0-9]-[0-9]+$')
+        && request.resource.data.tagLocked == true
+        && request.resource.data.sectionCode is string
+        && request.resource.data.sectionCode.matches('^[0-9][0-9]$')
+        && request.resource.data.sectionId is string
+        && request.resource.data.sectionNameSnapshot is string
+        && request.resource.data.ownerUid is string
+        && request.resource.data.ownerNameSnapshot is string
+        && request.resource.data.photoProvider == 'cloudinary'
+        && request.resource.data.status in ['draft', 'complete', 'upload_failed']
+        && request.resource.data.diagnosisStatus
+          in ['pending', 'operational', 'requires_attention', 'out_of_service']
+        && request.resource.data.entryMode
+          in ['new_entry', 'inventory_validation'];
+    }
+
+    function validCompletedSteamTrap() {
+      return request.resource.data.status != 'complete' || (
+        request.resource.data.zone is string
+        && request.resource.data.zone.size() > 0
+        && request.resource.data.equipmentName is string
+        && request.resource.data.equipmentName.size() > 0
+        && request.resource.data.serviceId is string
+        && request.resource.data.serviceId.size() > 0
+        && request.resource.data.diameter is string
+        && request.resource.data.diameter.size() > 0
+        && request.resource.data.trapTypeId is string
+        && request.resource.data.trapTypeId.size() > 0
+        && request.resource.data.condensateRecovery
+          in ['yes', 'no', 'to_confirm']
+        && request.resource.data.closePhoto is map
+        && request.resource.data.closePhoto.ownerUid == request.resource.data.ownerUid
+        && request.resource.data.closePhoto.tag == request.resource.data.tag
+        && request.resource.data.generalPhoto is map
+        && request.resource.data.generalPhoto.ownerUid == request.resource.data.ownerUid
+        && request.resource.data.generalPhoto.tag == request.resource.data.tag
+      );
+    }
+
+    function preservesSteamTrapIdentity() {
+      return request.resource.data.id == resource.data.id
+        && request.resource.data.tag == resource.data.tag
+        && request.resource.data.tagLocked == resource.data.tagLocked
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdByUid == resource.data.createdByUid;
+    }
+
+    function validAdminSteamTrapCorrection() {
+      return isAdmin()
+        && (
+          request.resource.data.sectionCode == resource.data.sectionCode
+          || (
+            request.resource.data.sectionHistory is list
+            && resource.data.sectionHistory is list
+            && request.resource.data.sectionHistory.size()
+              == resource.data.sectionHistory.size() + 1
+          )
+        );
+    }
+
     function updatesMaintenanceWorkflow() {
       return signedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -214,6 +282,70 @@ service cloud.firestore {
           in ['direct', 'indirect', 'direct_selection'];
       allow read: if isAdmin() || readsOwnRecord();
       allow update, delete: if false;
+    }
+
+    match /steam_trap_records/{document} {
+      allow create: if createsOwnRecord()
+        && validSteamTrapCore()
+        && validCompletedSteamTrap()
+        && request.resource.data.id == document
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerNameSnapshot
+          == request.resource.data.createdByNameSnapshot;
+      allow read: if isAdmin() || ownsSteamTrap();
+      allow update: if validSteamTrapCore()
+        && validCompletedSteamTrap()
+        && preservesSteamTrapIdentity()
+        && (
+          validAdminSteamTrapCorrection()
+          || (
+            ownsSteamTrap()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'zone',
+              'equipmentName',
+              'equipmentNameNormalized',
+              'serviceId',
+              'serviceNameSnapshot',
+              'diameter',
+              'trapTypeId',
+              'trapTypeNameSnapshot',
+              'condensateRecovery',
+              'comments',
+              'diagnosisStatus',
+              'entryMode',
+              'status',
+              'closePhoto',
+              'generalPhoto',
+              'updatedAt',
+              'updatedByUid',
+              'appVersion'
+            ])
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.updatedByUid == request.auth.uid
+          )
+        );
+      allow delete: if false;
+    }
+
+    match /steam_trap_counters/{sectionCode} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'sectionCode', 'lastNumber', 'updatedAt', 'updatedByUid'
+        ])
+        && request.resource.data.sectionCode == sectionCode
+        && request.resource.data.lastNumber == 1
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+      allow update: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'sectionCode', 'lastNumber', 'updatedAt', 'updatedByUid'
+        ])
+        && request.resource.data.sectionCode == resource.data.sectionCode
+        && request.resource.data.lastNumber == resource.data.lastNumber + 1
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+      allow delete: if false;
     }
 
     match /bare_pipe_reports/{document} {

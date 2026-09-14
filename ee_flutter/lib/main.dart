@@ -25,6 +25,7 @@ import 'domain/leak_report.dart';
 import 'domain/maintenance_report.dart';
 import 'domain/section_catalog.dart';
 import 'domain/steam_pressure_reading.dart';
+import 'domain/steam_trap_entry.dart';
 import 'domain/trap_sizing.dart';
 import 'domain/trap_sizing_report.dart';
 import 'firebase_options.dart';
@@ -44,6 +45,8 @@ import 'services/pressure_reading_store.dart';
 import 'services/report_store.dart';
 import 'services/pump_survey_store.dart';
 import 'services/trap_sizing_report_store.dart';
+import 'services/steam_trap_export_service.dart';
+import 'services/steam_trap_store.dart';
 import 'widgets/home_navigation_bar.dart';
 
 part 'screens/leak_report_screen.dart';
@@ -51,6 +54,7 @@ part 'screens/maintenance_history_screen.dart';
 part 'screens/boiler_readings_history_screen.dart';
 part 'screens/pressure_entry_tab.dart';
 part 'screens/input_controls_playground_screen.dart';
+part 'screens/steam_trap_module_screen.dart';
 
 const brandRed = Color(0xffe3263a);
 const brandRedDark = Color(0xffb8192a);
@@ -124,6 +128,10 @@ Future<void> main() async {
         firebaseReady: firebaseReady,
       ),
       maintenanceReportStore: maintenanceReportStore,
+      steamTrapStore: FirebaseSteamTrapStore(
+        firebaseReady: firebaseReady,
+        operatorSession: operatorSession,
+      ),
       updateService: AppUpdateService(firebaseReady: firebaseReady),
     ),
   );
@@ -142,6 +150,7 @@ class EeApp extends StatelessWidget {
     this.pumpSurveyStore = const DisabledPumpSurveyStore(),
     this.motorReferenceStore = const DisabledMotorReferenceStore(),
     this.maintenanceReportStore = const DisabledMaintenanceReportStore(),
+    this.steamTrapStore = const DisabledSteamTrapStore(),
     super.key,
   });
 
@@ -156,6 +165,7 @@ class EeApp extends StatelessWidget {
   final PumpSurveyStore pumpSurveyStore;
   final MotorReferenceStore motorReferenceStore;
   final MaintenanceReportStore maintenanceReportStore;
+  final SteamTrapStore steamTrapStore;
 
   @override
   Widget build(BuildContext context) {
@@ -200,6 +210,7 @@ class EeApp extends StatelessWidget {
         pumpSurveyStore: pumpSurveyStore,
         motorReferenceStore: motorReferenceStore,
         maintenanceReportStore: maintenanceReportStore,
+        steamTrapStore: steamTrapStore,
       ),
     );
   }
@@ -218,6 +229,7 @@ class SplashGate extends StatefulWidget {
     required this.pumpSurveyStore,
     required this.motorReferenceStore,
     required this.maintenanceReportStore,
+    required this.steamTrapStore,
     super.key,
   });
 
@@ -232,6 +244,7 @@ class SplashGate extends StatefulWidget {
   final PumpSurveyStore pumpSurveyStore;
   final MotorReferenceStore motorReferenceStore;
   final MaintenanceReportStore maintenanceReportStore;
+  final SteamTrapStore steamTrapStore;
 
   @override
   State<SplashGate> createState() => _SplashGateState();
@@ -276,6 +289,7 @@ class _SplashGateState extends State<SplashGate> {
           pumpSurveyStore: widget.pumpSurveyStore,
           motorReferenceStore: widget.motorReferenceStore,
           maintenanceReportStore: widget.maintenanceReportStore,
+          steamTrapStore: widget.steamTrapStore,
         ),
         IgnorePointer(
           ignoring: !_showSplash,
@@ -329,6 +343,7 @@ class HomeScreen extends StatefulWidget {
     required this.pumpSurveyStore,
     required this.motorReferenceStore,
     required this.maintenanceReportStore,
+    required this.steamTrapStore,
     super.key,
   });
 
@@ -342,6 +357,7 @@ class HomeScreen extends StatefulWidget {
   final PumpSurveyStore pumpSurveyStore;
   final MotorReferenceStore motorReferenceStore;
   final MaintenanceReportStore maintenanceReportStore;
+  final SteamTrapStore steamTrapStore;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -520,6 +536,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 builder: (_) => TrapSizingScreen(
                   reportStore: widget.trapSizingReportStore,
                   operatorSession: widget.operatorSession,
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+        EeActionButton(
+          key: const Key('steam-trap-module-button'),
+          icon: Icons.plumbing_outlined,
+          label: 'Ingreso Trampas de vapor',
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => SteamTrapModuleScreen(
+                  store: widget.steamTrapStore,
+                  cloudinaryService: widget.cloudinaryService,
+                  operatorSession: widget.operatorSession,
+                  operatorAuthService: widget.operatorAuthService,
                 ),
               ),
             );

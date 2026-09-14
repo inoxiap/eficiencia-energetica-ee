@@ -62,7 +62,9 @@ class FirebaseOperatorSession implements OperatorSession {
       if (storedName.isNotEmpty) {
         displayName = storedName;
       }
-      if (storedRole == 'admin' || storedRole == 'operator') {
+      if (storedRole == 'admin' ||
+          storedRole == 'operator' ||
+          storedRole == 'provider') {
         role = storedRole;
       }
     } catch (_) {
