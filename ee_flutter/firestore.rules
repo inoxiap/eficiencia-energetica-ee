@@ -98,13 +98,22 @@ service cloud.firestore {
     }
 
     function companyFieldsMatchCurrentUser() {
-      return request.resource.data.companyId is string
-        && request.resource.data.companyId == currentCompanyId()
-        && request.resource.data.companyNameSnapshot is string
-        && request.resource.data.companyNameSnapshot == currentCompanyName()
-        && request.resource.data.isDemo == false
-        && request.resource.data.sharedWithUids is list
-        && request.resource.data.sharedWithUids.size() == 0;
+      // La version 1.6.0 de Android no enviaba aun los cuatro campos de
+      // empresa/DEMO. Se mantiene compatible durante su distribucion: esos
+      // equipos solo podran leer y editar sus propios registros por las reglas
+      // de propiedad. Las versiones actuales deben enviar el grupo completo.
+      return !request.resource.data.keys().hasAny([
+          'companyId', 'companyNameSnapshot', 'isDemo', 'sharedWithUids'
+        ])
+        || (
+          request.resource.data.companyId is string
+          && request.resource.data.companyId == currentCompanyId()
+          && request.resource.data.companyNameSnapshot is string
+          && request.resource.data.companyNameSnapshot == currentCompanyName()
+          && request.resource.data.isDemo == false
+          && request.resource.data.sharedWithUids is list
+          && request.resource.data.sharedWithUids.size() == 0
+        );
     }
 
     function createsOwnRecord() {

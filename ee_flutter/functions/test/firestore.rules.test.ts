@@ -15,6 +15,7 @@ import {
   getDocs,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -209,6 +210,18 @@ async function seedProvider(
   });
 }
 
+async function seedInternalUser(uid: string) {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), `users/${uid}`), {
+      displayName: "Usuario interno",
+      role: "operator",
+      active: true,
+      companyId: "",
+      companyNameSnapshot: "",
+    });
+  });
+}
+
 describe("Firestore rules", () => {
   it("allows public app update configuration reads", async () => {
     await environment.withSecurityRulesDisabled(async (context) => {
@@ -287,12 +300,14 @@ describe("Firestore rules", () => {
   });
 
   it("shares maintenance reports and limits workflow updates", async () => {
-    const creator = environment.authenticatedContext("operator-1").firestore();
+    const creator = environment
+      .authenticatedContext("operator-1", {role: "operator"})
+      .firestore();
     const reference = doc(creator, "leak_reports/leak-1");
     await assertSucceeds(setDoc(reference, leakReport("operator-1")));
 
     const secondOperator = environment
-      .authenticatedContext("operator-2")
+      .authenticatedContext("operator-2", {role: "operator"})
       .firestore();
     const sharedReference = doc(secondOperator, "leak_reports/leak-1");
     await assertSucceeds(getDoc(sharedReference));
@@ -503,6 +518,99 @@ describe("Firestore rules", () => {
         "steam_trap_records/steam-trap-1",
       )),
     );
+  });
+
+  it("allows an internal user without token claims to reserve and complete a steam trap", async () => {
+    await seedInternalUser("internal-1");
+    const internal = environment.authenticatedContext("internal-1").firestore();
+    const record = doc(internal, "steam_trap_records/internal-trap-1");
+    const counter = doc(internal, "steam_trap_counters/02");
+
+    await assertSucceeds(runTransaction(internal, async (transaction) => {
+      transaction.set(counter, {
+        sectionCode: "02",
+        lastNumber: 1,
+        updatedAt: serverTimestamp(),
+        updatedByUid: "internal-1",
+      });
+      transaction.set(record, {
+        ...steamTrapRecord("internal-1", ""),
+        id: "internal-trap-1",
+        tag: "TV-02-001",
+        sectionCode: "02",
+        sectionId: "desodorizacion",
+        sectionNameSnapshot: "Desodorizacion",
+        ownerNameSnapshot: "Usuario interno",
+        createdByNameSnapshot: "Usuario interno",
+        companyId: "",
+        companyNameSnapshot: "",
+      });
+    }));
+
+    await assertSucceeds(updateDoc(record, {
+      zone: "Zona de prueba",
+      equipmentName: "Equipo de prueba",
+      equipmentNameNormalized: "equipo de prueba",
+      serviceId: "serpentin",
+      serviceNameSnapshot: "Serpentin",
+      diameter: "3/4 in",
+      trapTypeId: "inverted_bucket",
+      trapTypeNameSnapshot: "Balde invertido",
+      condensateRecovery: "to_confirm",
+      status: "complete",
+      closePhoto: {
+        ownerUid: "internal-1",
+        tag: "TV-02-001",
+        url: "https://example.test/close.jpg",
+      },
+      generalPhoto: {
+        ownerUid: "internal-1",
+        tag: "TV-02-001",
+        url: "https://example.test/general.jpg",
+      },
+      updatedAt: serverTimestamp(),
+      updatedByUid: "internal-1",
+      appVersion: "1.7.1+12",
+    }));
+  });
+
+  it("keeps Android 1.6 steam-trap reservations compatible during rollout", async () => {
+    await seedInternalUser("legacy-internal");
+    const legacy = environment.authenticatedContext("legacy-internal").firestore();
+    const record = doc(legacy, "steam_trap_records/legacy-trap-1");
+    const legacyPayload: Record<string, unknown> = {
+      ...steamTrapRecord("legacy-internal", ""),
+      id: "legacy-trap-1",
+      tag: "TV-02-001",
+      sectionCode: "02",
+      sectionId: "desodorizacion",
+      sectionNameSnapshot: "Desodorizacion",
+      ownerNameSnapshot: "Usuario interno",
+      createdByNameSnapshot: "Usuario interno",
+    };
+    delete legacyPayload.companyId;
+    delete legacyPayload.companyNameSnapshot;
+    delete legacyPayload.isDemo;
+    delete legacyPayload.sharedWithUids;
+
+    await assertSucceeds(setDoc(record, legacyPayload));
+    await assertSucceeds(updateDoc(record, {
+      zone: "Zona de prueba",
+      equipmentName: "Equipo de prueba",
+      equipmentNameNormalized: "equipo de prueba",
+      serviceId: "serpentin",
+      serviceNameSnapshot: "Serpentin",
+      diameter: "3/4 in",
+      trapTypeId: "inverted_bucket",
+      trapTypeNameSnapshot: "Balde invertido",
+      condensateRecovery: "to_confirm",
+      status: "complete",
+      closePhoto: {ownerUid: "legacy-internal", tag: "TV-02-001"},
+      generalPhoto: {ownerUid: "legacy-internal", tag: "TV-02-001"},
+      updatedAt: serverTimestamp(),
+      updatedByUid: "legacy-internal",
+      appVersion: "1.6.0+10",
+    }));
   });
 
   it("denies provider access to internal modules and after credential expiry", async () => {

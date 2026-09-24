@@ -16,7 +16,7 @@ o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
   `https://github.com/inoxiap/eficiencia-energetica-ee.git`
 - Rama principal: `main`.
 - Aplicacion activa: `ee_flutter/`.
-- Version Flutter actual: `1.7.0+11`.
+- Version Flutter actual: `1.7.1+12`.
 - La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
   historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
 
@@ -294,6 +294,28 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   descartarlo sin instruccion expresa de Jeff.
 
 ## Bitacora
+
+### 2026-09-24 - Compatibilidad de guardado de trampas en Android 1.6
+
+- Incidente: al confirmar un levantamiento de trampa desde un Android con la
+  version 1.6.0, Firestore respondia `permission-denied` antes de crear el
+  borrador y de asignar el TAG. La carga local de las dos fotografias no era la
+  causa.
+- Diagnostico: el perfil interno de Jeff es valido y no existia contador para
+  la seccion 02. La version 1.6.0 no enviaba aun los campos de empresa/DEMO
+  que las reglas nuevas exigian; por eso se rechazaba la creacion.
+- Correccion: `companyFieldsMatchCurrentUser` acepta temporalmente el grupo de
+  campos completamente ausente de Android 1.6.0. Las versiones actuales deben
+  seguir enviando y validando el grupo completo. La propiedad del registro, la
+  autenticacion y las restricciones de proveedores no se relajan.
+- Pruebas: 20 pruebas de reglas aprobadas en Firestore Emulator, incluidas la
+  transaccion de reserva de TAG y la finalizacion para un usuario interno sin
+  custom claims, mas la compatibilidad de Android 1.6.0. `flutter analyze
+  --no-pub` se inicio sin hallazgos inmediatos; completar antes de cualquier
+  proximo cambio Flutter.
+- Despliegue: reglas compiladas y publicadas en produccion con
+  `firebase deploy --only firestore:rules` el 2026-09-24. No se modificaron
+  documentos, fotografias ni contadores existentes.
 
 ### 2026-09-24 - Provisionamiento productivo de proveedores y dataset DEMO
 
