@@ -1,6 +1,6 @@
 # Memoria del proyecto: Eficiencia Energetica EE
 
-Ultima actualizacion: 2026-09-14
+Ultima actualizacion: 2026-09-23
 
 Este documento es la memoria operativa persistente del proyecto. Debe leerse
 completo al iniciar o retomar cualquier tarea y actualizarse al terminar cambios
@@ -16,7 +16,7 @@ o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
   `https://github.com/inoxiap/eficiencia-energetica-ee.git`
 - Rama principal: `main`.
 - Aplicacion activa: `ee_flutter/`.
-- Version Flutter registrada: `1.6.0+10`.
+- Version Flutter actual: `1.7.0+11`.
 - La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
   historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
 
@@ -67,17 +67,17 @@ necesitar criterio tecnico avanzado para completar un levantamiento.
 - Web/PWA:
   `https://eficiencia-energetica-ee.web.app`
 - Android vigente:
-  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/tag/v1.6.0`.
-- `app_config/mobile_app` anuncia `1.6.0+10` con actualizacion opcional y URL
-  directa al APK firmado.
+  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/tag/v1.7.0`.
+- `app_config/mobile_app` aun requiere elevar el numero anunciado a build 11;
+  el ultimo valor conocido era `1.6.0+10`.
 - Firebase Hosting publica `ee_flutter/build/web`.
 - El proveedor Firebase Authentication Email/Password fue habilitado y probado
   en produccion el 2026-07-16.
 - El operador usa cedula y PIN en pantalla. Internamente la app deriva un correo
   tecnico y usa Firebase Email/Password. El PIN no se guarda en Firestore,
   SharedPreferences ni localStorage.
-- El registro publico siempre crea rol `operator`. El rol `admin` debe asignarse
-  desde un entorno administrativo confiable.
+- El registro publico esta deshabilitado. Las cuentas existentes mantienen su
+  rol; nuevos usuarios requieren provisionamiento administrativo.
 - El dashboard FastAPI aun no esta desplegado como servicio HTTPS. Su ejecucion
   conocida es local en `http://127.0.0.1:8080`.
 - No trabajar con Firebase Emulator Suite salvo que Jeff lo solicite. Durante el
@@ -1154,8 +1154,11 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   no acceden a modulos internos. Las reglas de perfil bloquean autoasignacion de
   rol. Se conservo Cloudinary. Dos fotos genericas reutilizadas por ejemplos.
 - Version: Flutter `1.7.0+11`; Hosting publicado en
-  `https://eficiencia-energetica-ee.web.app`. APK release de 56.6 MB compilado,
-  pero el release de GitHub y el aviso Android aun no se publicaron/actualizaron.
+  `https://eficiencia-energetica-ee.web.app`. APK de 56.6 MB publicado en
+  GitHub Release `v1.7.0`; enlace directo:
+  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/download/v1.7.0/eficiencia-energetica-ee-1.7.0-build11.apk`.
+  El aviso automatico Android aun espera que `app_config/mobile_app` anuncie
+  build 11.
 - Pruebas: `flutter analyze --no-pub` aprobado; 56 pruebas Flutter aprobadas;
   5 pruebas de credenciales Functions aprobadas; `npm run build` aprobado;
   reglas compiladas por Firebase durante el despliegue. No se ejecuto Emulator
@@ -1167,9 +1170,10 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   fallo y `firebase.json` de `ee_flutter` no configura deploy de Functions; no se
   modifico el plan Spark ni se desplego una Function.
 - Pendiente para concluir: obtener acceso administrativo Firebase/ADC temporal
-  seguro o que Jeff complete alta desde una consola autorizada; conocer UID de
-  Jeff para el compartir DEMO; publicar el APK en GitHub Releases y elevar
-  `app_config/mobile_app` a build 11. Los PIN no se guardaron en archivos.
+  seguro o que Jeff complete el alta en una consola autorizada; conocer UID de
+  Jeff para compartir el DEMO; crear las cuatro cuentas y el dataset de cuatro
+  registros con dos fotos Cloudinary compartidas; elevar `app_config/mobile_app`
+  a build 11. Los PIN no se guardaron en archivos.
 - Archivos principales: reglas, indices, `operator_session.dart`, `main.dart`,
   `steam_trap_store.dart`, `steam_trap_export_service.dart`, scripts de
   provision/seed, modelos y docs de seguridad/datos.
