@@ -306,12 +306,13 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
 - Archivos: `ee_flutter/lib/screens/steam_trap_module_screen.dart` y
   `ee_flutter/pubspec.yaml` (`1.7.4+15`).
 - Verificacion: `flutter analyze --no-pub --no-fatal-infos` sin hallazgos;
-  build web release correcto; APK release generado y firmado con v2. Se
-  publico Hosting y se verifico `main.dart.js` remoto por HTTP 200. No se
-  publicaron aun un GitHub Release Android ni el aviso de actualizacion.
-- Riesgo/pendiente: el release Android requiere subir el APK firmado al flujo
-  GitHub existente y actualizar `app_config/mobile_app`; hasta entonces los
-  usuarios de la app instalada deben usar el navegador o esperar publicacion.
+  build web release correcto; APK release generado y firmado con v2. Hosting
+  publicado; release GitHub `v1.7.4` creado con el APK build 15.
+- Aviso de actualizacion: `app_config/mobile_app` actualizado en produccion a
+  Android y web `1.7.4` / build `15`, con URL de descarga Android del release y
+  mensaje informando que ahora se puede tomar la foto o elegirla de galeria.
+- Resultado: la web ya ofrece ambas opciones; los dispositivos Android que
+  consulten el aviso de version veran build 15 disponible para instalar.
 
 ### 2026-09-24 - Reintento seguro de reserva de TAG para proveedores
 
