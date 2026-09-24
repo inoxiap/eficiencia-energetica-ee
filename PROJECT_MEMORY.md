@@ -16,7 +16,7 @@ o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
   `https://github.com/inoxiap/eficiencia-energetica-ee.git`
 - Rama principal: `main`.
 - Aplicacion activa: `ee_flutter/`.
-- Version Flutter actual: `1.7.3+14`.
+- Version Flutter actual: `1.7.4+15`.
 - La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
   historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
 
@@ -294,6 +294,24 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   descartarlo sin instruccion expresa de Jeff.
 
 ## Bitacora
+
+### 2026-09-24 - Camara o galeria en el levantamiento de trampas
+
+- Solicitud: permitir a proveedores tomar cada evidencia con la camara o
+  seleccionar una foto que ya exista en el telefono.
+- Resultado: cada tarjeta de foto ahora abre un selector explicito `Tomar foto`
+  o `Elegir de la galeria`; ambas opciones conservan la reduccion de imagen y
+  el flujo existente de carga a Cloudinary. Si la camara o galeria no abre, se
+  muestra un mensaje legible para revisar permisos.
+- Archivos: `ee_flutter/lib/screens/steam_trap_module_screen.dart` y
+  `ee_flutter/pubspec.yaml` (`1.7.4+15`).
+- Verificacion: `flutter analyze --no-pub --no-fatal-infos` sin hallazgos;
+  build web release correcto; APK release generado y firmado con v2. Se
+  publico Hosting y se verifico `main.dart.js` remoto por HTTP 200. No se
+  publicaron aun un GitHub Release Android ni el aviso de actualizacion.
+- Riesgo/pendiente: el release Android requiere subir el APK firmado al flujo
+  GitHub existente y actualizar `app_config/mobile_app`; hasta entonces los
+  usuarios de la app instalada deben usar el navegador o esperar publicacion.
 
 ### 2026-09-24 - Reintento seguro de reserva de TAG para proveedores
 

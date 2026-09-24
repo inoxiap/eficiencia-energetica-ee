@@ -665,31 +665,58 @@ class _SteamTrapEntryPanelState extends State<SteamTrapEntryPanel> {
       _diameter == 'Otro' ? _diameterOther.text.trim() : _diameter;
 
   Future<void> _pickPhoto(String type) async {
-    XFile? file;
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const Key('steam-trap-photo-camera'),
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Tomar foto'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              key: const Key('steam-trap-photo-gallery'),
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Elegir de la galeria'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
     try {
-      file = await _picker.pickImage(
-        source: ImageSource.camera,
+      final file = await _picker.pickImage(
+        source: source,
         imageQuality: 85,
         maxWidth: 1600,
       );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        if (type == 'close') {
+          _closeBytes = bytes;
+        } else {
+          _generalBytes = bytes;
+        }
+        _invalidate();
+      });
     } catch (_) {
-      file = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-        maxWidth: 1600,
-      );
+      if (!mounted) return;
+      setState(() {
+        _messageType = MessageType.error;
+        _message = source == ImageSource.camera
+            ? 'No se pudo abrir la camara. Revisa el permiso de camara del navegador y vuelve a intentarlo.'
+            : 'No se pudo abrir la galeria de fotos. Revisa los permisos del telefono y vuelve a intentarlo.';
+      });
     }
-    if (file == null) return;
-    final bytes = await file.readAsBytes();
-    if (!mounted) return;
-    setState(() {
-      if (type == 'close') {
-        _closeBytes = bytes;
-      } else {
-        _generalBytes = bytes;
-      }
-      _invalidate();
-    });
   }
 
   String? _validationError({required bool complete}) {
