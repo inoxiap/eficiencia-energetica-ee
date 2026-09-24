@@ -6,6 +6,60 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function userProfileExists() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isProvider() {
+      return signedIn() && (
+        request.auth.token.role == 'provider'
+        || (userProfileExists() && userProfile().role == 'provider')
+      );
+    }
+
+    function providerCredentialIsValid() {
+      return !isProvider() || (
+        userProfileExists()
+        && userProfile().active == true
+        && userProfile().credentialExpiresAt is timestamp
+        && userProfile().credentialExpiresAt > request.time
+      );
+    }
+
+    function internalUser() {
+      return signedIn()
+        && !isProvider()
+        && (
+          request.auth.token.role in ['operator', 'admin']
+          || (
+            userProfileExists()
+            && userProfile().role in ['operator', 'admin']
+          )
+        );
+    }
+
+    function hasTrapAccess() {
+      return internalUser()
+        || (isProvider() && providerCredentialIsValid());
+    }
+
+    function currentCompanyId() {
+      return userProfileExists() && userProfile().companyId is string
+        ? userProfile().companyId
+        : '';
+    }
+
+    function currentCompanyName() {
+      return userProfileExists() && userProfile().companyNameSnapshot is string
+        ? userProfile().companyNameSnapshot
+        : '';
+    }
+
     function isAdmin() {
       return signedIn() && (
         request.auth.token.role == 'admin'
@@ -14,6 +68,32 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
         )
       );
+    }
+
+    function canReadSteamTrap() {
+      return hasTrapAccess() && (
+        resource.data.ownerUid == request.auth.uid
+        || (
+          resource.data.companyId is string
+          && resource.data.companyId.size() > 0
+          && resource.data.companyId == currentCompanyId()
+        )
+        || (
+          resource.data.isDemo == true
+          && resource.data.sharedWithUids is list
+          && resource.data.sharedWithUids.hasAny([request.auth.uid])
+        )
+      );
+    }
+
+    function companyFieldsMatchCurrentUser() {
+      return request.resource.data.companyId is string
+        && request.resource.data.companyId == currentCompanyId()
+        && request.resource.data.companyNameSnapshot is string
+        && request.resource.data.companyNameSnapshot == currentCompanyName()
+        && request.resource.data.isDemo == false
+        && request.resource.data.sharedWithUids is list
+        && request.resource.data.sharedWithUids.size() == 0;
     }
 
     function createsOwnRecord() {
@@ -28,7 +108,8 @@ service cloud.firestore {
     }
 
     function readsOwnRecord() {
-      return signedIn() && resource.data.createdByUid == request.auth.uid;
+      return internalUser()
+        && resource.data.createdByUid == request.auth.uid;
     }
 
     function ownsSteamTrap() {
@@ -46,6 +127,14 @@ service cloud.firestore {
         && request.resource.data.sectionNameSnapshot is string
         && request.resource.data.ownerUid is string
         && request.resource.data.ownerNameSnapshot is string
+        && (!request.resource.data.keys().hasAny(['companyId'])
+          || request.resource.data.companyId is string)
+        && (!request.resource.data.keys().hasAny(['companyNameSnapshot'])
+          || request.resource.data.companyNameSnapshot is string)
+        && (!request.resource.data.keys().hasAny(['isDemo'])
+          || request.resource.data.isDemo is bool)
+        && (!request.resource.data.keys().hasAny(['sharedWithUids'])
+          || request.resource.data.sharedWithUids is list)
         && request.resource.data.photoProvider == 'cloudinary'
         && request.resource.data.status in ['draft', 'complete', 'upload_failed']
         && request.resource.data.diagnosisStatus
@@ -82,6 +171,12 @@ service cloud.firestore {
         && request.resource.data.tag == resource.data.tag
         && request.resource.data.tagLocked == resource.data.tagLocked
         && request.resource.data.ownerUid == resource.data.ownerUid
+        && (!resource.data.keys().hasAny(['companyId'])
+          || request.resource.data.companyId == resource.data.companyId)
+        && (!resource.data.keys().hasAny(['isDemo'])
+          || request.resource.data.isDemo == resource.data.isDemo)
+        && (!resource.data.keys().hasAny(['sharedWithUids'])
+          || request.resource.data.sharedWithUids == resource.data.sharedWithUids)
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.createdByUid == resource.data.createdByUid;
     }
@@ -100,7 +195,7 @@ service cloud.firestore {
     }
 
     function updatesMaintenanceWorkflow() {
-      return signedIn()
+      return internalUser()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'workOrderCreated',
           'workOrderCreatedAt',
@@ -238,31 +333,18 @@ service cloud.firestore {
     }
 
     match /catalog_sections/{document} {
-      allow read: if signedIn();
+      allow read: if internalUser();
       allow write: if false;
     }
 
     match /motor_reference_tables/{document} {
-      allow read: if signedIn();
+      allow read: if internalUser();
       allow write: if false;
     }
 
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow create: if signedIn()
-        && request.auth.uid == uid
-        && request.resource.data.id == uid
-        && request.resource.data.displayName is string
-        && request.resource.data.nationalId is string
-        && request.resource.data.nationalId.size() == 10
-        && request.resource.data.role == 'operator'
-        && request.resource.data.active == true
-        && request.resource.data.createdByUid == uid
-        && request.resource.data.updatedByUid == uid
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time
-        && request.resource.data.source == 'self_registration';
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /user_private_credentials/{document} {
@@ -275,7 +357,8 @@ service cloud.firestore {
     }
 
     match /steam_trap_sizing_reports/{document} {
-      allow create: if createsOwnRecord()
+      allow create: if internalUser()
+        && createsOwnRecord()
         && request.resource.data.sectionId is string
         && request.resource.data.equipmentName is string
         && request.resource.data.calculationMethod
@@ -285,21 +368,24 @@ service cloud.firestore {
     }
 
     match /steam_trap_records/{document} {
-      allow create: if createsOwnRecord()
+      allow create: if hasTrapAccess()
+        && createsOwnRecord()
         && validSteamTrapCore()
         && validCompletedSteamTrap()
+        && companyFieldsMatchCurrentUser()
         && request.resource.data.id == document
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerNameSnapshot
           == request.resource.data.createdByNameSnapshot;
-      allow read: if isAdmin() || ownsSteamTrap();
+      allow read: if isAdmin() || canReadSteamTrap();
       allow update: if validSteamTrapCore()
         && validCompletedSteamTrap()
         && preservesSteamTrapIdentity()
         && (
           validAdminSteamTrapCorrection()
           || (
-            ownsSteamTrap()
+            hasTrapAccess()
+            && ownsSteamTrap()
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'zone',
               'equipmentName',
@@ -328,8 +414,8 @@ service cloud.firestore {
     }
 
     match /steam_trap_counters/{sectionCode} {
-      allow read: if signedIn();
-      allow create: if signedIn()
+      allow read: if hasTrapAccess();
+      allow create: if hasTrapAccess()
         && request.resource.data.keys().hasOnly([
           'sectionCode', 'lastNumber', 'updatedAt', 'updatedByUid'
         ])
@@ -337,7 +423,7 @@ service cloud.firestore {
         && request.resource.data.lastNumber == 1
         && request.resource.data.updatedAt == request.time
         && request.resource.data.updatedByUid == request.auth.uid;
-      allow update: if signedIn()
+      allow update: if hasTrapAccess()
         && request.resource.data.keys().hasOnly([
           'sectionCode', 'lastNumber', 'updatedAt', 'updatedByUid'
         ])
@@ -349,17 +435,19 @@ service cloud.firestore {
     }
 
     match /bare_pipe_reports/{document} {
-      allow create: if createsOwnRecord()
+      allow create: if internalUser()
+        && createsOwnRecord()
         && request.resource.data.sectionId is string
         && request.resource.data.equipmentName is string
         && request.resource.data.photoProvider == 'cloudinary';
-      allow read: if signedIn();
+      allow read: if internalUser();
       allow update: if updatesMaintenanceWorkflow();
       allow delete: if false;
     }
 
     match /leak_reports/{document} {
-      allow create: if createsOwnRecord()
+      allow create: if internalUser()
+        && createsOwnRecord()
         && request.resource.data.sectionId is string
         && request.resource.data.equipmentName is string
         && (
@@ -382,14 +470,14 @@ service cloud.firestore {
         && request.resource.data.photoProvider == 'cloudinary'
         && request.resource.data.workOrderCreated == false
         && request.resource.data.workCompleted == false;
-      allow read: if signedIn();
+      allow read: if internalUser();
       allow update: if updatesMaintenanceWorkflow();
       allow delete: if false;
     }
 
     match /maintenance_counters/leak_reports {
-      allow read: if signedIn();
-      allow create: if signedIn()
+      allow read: if internalUser();
+      allow create: if internalUser()
         && request.resource.data.keys().hasOnly([
           'nextNumber',
           'updatedAt',
@@ -398,7 +486,7 @@ service cloud.firestore {
         && request.resource.data.nextNumber == 1
         && request.resource.data.updatedAt == request.time
         && request.resource.data.updatedByUid == request.auth.uid;
-      allow update: if signedIn()
+      allow update: if internalUser()
         && request.resource.data.keys().hasOnly([
           'nextNumber',
           'updatedAt',
@@ -411,7 +499,8 @@ service cloud.firestore {
     }
 
     match /boiler_consumption_readings/{document} {
-      allow create: if createsOwnRecord()
+      allow create: if internalUser()
+        && createsOwnRecord()
         && request.resource.data.boilerId is string
         && request.resource.data.readingMode == 'cumulative_meter'
         && (
@@ -424,12 +513,13 @@ service cloud.firestore {
           )
         )
         && !request.resource.data.keys().hasAny(['operatorPin']);
-      allow read: if signedIn();
+      allow read: if internalUser();
       allow update, delete: if false;
     }
 
     match /steam_pressure_readings/{document} {
-      allow create: if createsOwnRecord()
+      allow create: if internalUser()
+        && createsOwnRecord()
         && request.resource.data.pressureUnit == 'psi'
         && request.resource.data.sectionId == 'servicios_industriales'
         && request.resource.data.equipmentName is string
@@ -444,11 +534,12 @@ service cloud.firestore {
     }
 
     match /pump_energy_surveys/{document} {
-      allow create: if createsOwnRecord()
+      allow create: if internalUser()
+        && createsOwnRecord()
         && request.resource.data.assetId is string
         && request.resource.data.surveyType
           in ['baseline', 'post_improvement', 'verification'];
-      allow read: if signedIn();
+      allow read: if internalUser();
       allow update, delete: if false;
     }
 

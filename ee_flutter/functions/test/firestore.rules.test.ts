@@ -9,11 +9,16 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   deleteDoc,
+  collection,
   doc,
   getDoc,
+  getDocs,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import {afterAll, afterEach, beforeAll, describe, it} from "vitest";
 
@@ -146,7 +151,7 @@ function boilerReading(uid: string, mode = "cumulative_meter") {
   };
 }
 
-function steamTrapRecord(uid: string) {
+function steamTrapRecord(uid: string, companyId = "la_llave") {
   return {
     id: "steam-trap-1",
     tag: "TV-15-001",
@@ -170,6 +175,10 @@ function steamTrapRecord(uid: string) {
     photoProvider: "cloudinary",
     ownerUid: uid,
     ownerNameSnapshot: "Proveedor Uno",
+    companyId,
+    companyNameSnapshot: companyId === "la_llave" ? "La Llave" : "Hivimar",
+    isDemo: false,
+    sharedWithUids: [],
     createdAt: serverTimestamp(),
     createdByUid: uid,
     createdByNameSnapshot: "Proveedor Uno",
@@ -181,6 +190,23 @@ function steamTrapRecord(uid: string) {
     source: "manual",
     sectionHistory: [],
   };
+}
+
+async function seedProvider(
+  uid: string,
+  companyId: string,
+  expiresAt = new Date("2026-12-01T05:00:00.000Z"),
+) {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), `users/${uid}`), {
+      displayName: uid,
+      role: "provider",
+      active: true,
+      companyId,
+      companyNameSnapshot: companyId === "la_llave" ? "La Llave" : "Hivimar",
+      credentialExpiresAt: expiresAt,
+    });
+  });
 }
 
 describe("Firestore rules", () => {
@@ -213,9 +239,9 @@ describe("Firestore rules", () => {
     await assertSucceeds(getDoc(reference));
   });
 
-  it("allows a signed-in user to create only their operator profile", async () => {
+  it("rejects public profile registration", async () => {
     const operator = environment.authenticatedContext("operator-1").firestore();
-    await assertSucceeds(
+    await assertFails(
       setDoc(doc(operator, "users/operator-1"), {
         id: "operator-1",
         displayName: "Operador Uno",
@@ -242,6 +268,21 @@ describe("Firestore rules", () => {
         updatedByUid: "operator-1",
         source: "self_registration",
       }),
+    );
+  });
+
+  it("denies access to accounts without an assigned internal role", async () => {
+    const unprovisioned = environment
+      .authenticatedContext("unprovisioned-user")
+      .firestore();
+    await assertFails(
+      getDoc(doc(unprovisioned, "boiler_consumption_readings/boiler-1")),
+    );
+    await assertFails(
+      setDoc(
+        doc(unprovisioned, "steam_trap_records/unprovisioned-trap"),
+        steamTrapRecord("unprovisioned-user"),
+      ),
     );
   });
 
@@ -419,7 +460,10 @@ describe("Firestore rules", () => {
     );
   });
 
-  it("isolates physical steam-trap records by owner", async () => {
+  it("shares steam-trap reads within a company but keeps edits owner-only", async () => {
+    await seedProvider("provider-1", "la_llave");
+    await seedProvider("provider-2", "la_llave");
+    await seedProvider("provider-3", "hivimar");
     const provider = environment
       .authenticatedContext("provider-1", {role: "provider"})
       .firestore();
@@ -430,9 +474,15 @@ describe("Firestore rules", () => {
     const other = environment
       .authenticatedContext("provider-2", {role: "provider"})
       .firestore();
-    await assertFails(
+    await assertSucceeds(
       getDoc(doc(other, "steam_trap_records/steam-trap-1")),
     );
+    const companyRows = await getDocs(query(
+      collection(other, "steam_trap_records"),
+      where("companyId", "==", "la_llave"),
+      orderBy("updatedAt", "desc"),
+    ));
+    if (companyRows.size !== 1) throw new Error("Expected shared company record.");
     await assertFails(
       updateDoc(doc(other, "steam_trap_records/steam-trap-1"), {
         comments: "Intento ajeno",
@@ -447,6 +497,70 @@ describe("Firestore rules", () => {
         updatedByUid: "provider-1",
       }),
     );
+    await assertFails(
+      getDoc(doc(
+        environment.authenticatedContext("provider-3", {role: "provider"}).firestore(),
+        "steam_trap_records/steam-trap-1",
+      )),
+    );
+  });
+
+  it("denies provider access to internal modules and after credential expiry", async () => {
+    await seedProvider("provider-active", "la_llave");
+    await seedProvider("provider-expired", "la_llave", new Date("2020-01-01T00:00:00Z"));
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "boiler_consumption_readings/boiler-1"),
+        {createdByUid: "operator-1"},
+      );
+      await setDoc(
+        doc(context.firestore(), "steam_trap_records/expired-trap"),
+        {...steamTrapRecord("provider-expired"), createdAt: new Date(), updatedAt: new Date()},
+      );
+    });
+    const active = environment
+      .authenticatedContext("provider-active", {role: "provider"})
+      .firestore();
+    await assertFails(
+      getDoc(doc(active, "boiler_consumption_readings/boiler-1")),
+    );
+    const expired = environment
+      .authenticatedContext("provider-expired", {role: "provider"})
+      .firestore();
+    await assertFails(
+      getDoc(doc(expired, "steam_trap_records/expired-trap")),
+    );
+  });
+
+  it("allows explicitly shared demonstration records only", async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "steam_trap_records/demo-1"),
+        {
+          ...steamTrapRecord("seed-script", "demo"),
+          companyNameSnapshot: "Demostracion",
+          isDemo: true,
+          sharedWithUids: ["jeff-uid"],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      );
+    });
+    const jeff = environment
+      .authenticatedContext("jeff-uid", {role: "operator"})
+      .firestore();
+    await assertSucceeds(getDoc(doc(jeff, "steam_trap_records/demo-1")));
+    const demoRows = await getDocs(query(
+      collection(jeff, "steam_trap_records"),
+      where("isDemo", "==", true),
+      where("sharedWithUids", "array-contains", "jeff-uid"),
+      orderBy("updatedAt", "desc"),
+    ));
+    if (demoRows.size !== 1) throw new Error("Expected one shared demo record.");
+    const other = environment
+      .authenticatedContext("other-uid", {role: "operator"})
+      .firestore();
+    await assertFails(getDoc(doc(other, "steam_trap_records/demo-1")));
   });
 
   it("allows admins to read all steam-trap records", async () => {

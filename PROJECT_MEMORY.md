@@ -1132,6 +1132,48 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   Actions y Power Automate los dias 19, 20, 21, 28, 29, 30 y 31 de agosto de
   2026, conservando el cursor operativo de septiembre. Commit `016ee26`.
 
+### 2026-09-23 - Acceso por empresa para proveedores de trampas
+
+- Jeff entrego cuatro identidades de proveedores de Hivimar y La Llave y pidio
+  que cada proveedor vea y descargue registros de trampas de su empresa; la
+  edicion de registros ajenos debe seguir restringida.
+- Solicito cuentas con PIN temporal individual de cuatro digitos, vigente hasta
+  el 2026-12-01, y datos/fotografias de demostracion descargables para su
+  usuario existente.
+- Auditoria: `steam_trap_records` actualmente autoriza lectura al propietario o
+  admin y el cliente consulta por `ownerUid`; la pantalla principal muestra los
+  modulos internos sin filtrar por rol. Las reglas actuales permiten a cualquier
+  usuario autenticado leer varias colecciones internas, por lo que ocultar
+  botones no bastaria para aislar proveedores.
+- Implementado: inicio de proveedor muestra solo Ingreso Trampas; usuarios sin
+  perfil/rol asignado quedan bloqueados. Public registration UI fue retirado.
+  Consultas combinan propietario, empresa y DEMO compartido; la edicion sigue
+  siendo solo del propietario. Exportacion marca empresa y DEMO/REAL.
+- Seguridad: reglas de produccion e indices se desplegaron correctamente. Los
+  proveedores solo acceden a trampas con credencial activa y vencimiento futuro;
+  no acceden a modulos internos. Las reglas de perfil bloquean autoasignacion de
+  rol. Se conservo Cloudinary. Dos fotos genericas reutilizadas por ejemplos.
+- Version: Flutter `1.7.0+11`; Hosting publicado en
+  `https://eficiencia-energetica-ee.web.app`. APK release de 56.6 MB compilado,
+  pero el release de GitHub y el aviso Android aun no se publicaron/actualizaron.
+- Pruebas: `flutter analyze --no-pub` aprobado; 56 pruebas Flutter aprobadas;
+  5 pruebas de credenciales Functions aprobadas; `npm run build` aprobado;
+  reglas compiladas por Firebase durante el despliegue. No se ejecuto Emulator
+  Suite (preferencia de Jeff).
+- Administracion productiva pendiente: no se crearon las 4 cuentas ni los
+  registros DEMO/fotos. No hay `GOOGLE_APPLICATION_CREDENTIALS` ni ADC local; la
+  consola web muestra que `jjordonez14@gmail.com` no puede listar apps del
+  proyecto. No se deben guardar llaves de servicio en Git. `functions:list`
+  fallo y `firebase.json` de `ee_flutter` no configura deploy de Functions; no se
+  modifico el plan Spark ni se desplego una Function.
+- Pendiente para concluir: obtener acceso administrativo Firebase/ADC temporal
+  seguro o que Jeff complete alta desde una consola autorizada; conocer UID de
+  Jeff para el compartir DEMO; publicar el APK en GitHub Releases y elevar
+  `app_config/mobile_app` a build 11. Los PIN no se guardaron en archivos.
+- Archivos principales: reglas, indices, `operator_session.dart`, `main.dart`,
+  `steam_trap_store.dart`, `steam_trap_export_service.dart`, scripts de
+  provision/seed, modelos y docs de seguridad/datos.
+
 ## Plantilla para futuras entradas
 
 ```markdown

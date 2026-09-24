@@ -100,6 +100,9 @@ class SteamTrapRecord {
     required this.status,
     required this.ownerUid,
     required this.ownerName,
+    this.companyId = '',
+    this.companyName = '',
+    this.isDemo = false,
     required this.createdAt,
     required this.updatedAt,
     this.closePhoto,
@@ -125,6 +128,9 @@ class SteamTrapRecord {
   final String status;
   final String ownerUid;
   final String ownerName;
+  final String companyId;
+  final String companyName;
+  final bool isDemo;
   final DateTime createdAt;
   final DateTime updatedAt;
   final SteamTrapPhoto? closePhoto;
@@ -164,6 +170,9 @@ class SteamTrapRecord {
       status: json['status'] as String? ?? 'draft',
       ownerUid: json['ownerUid'] as String? ?? '',
       ownerName: json['ownerNameSnapshot'] as String? ?? '',
+      companyId: json['companyId'] as String? ?? '',
+      companyName: json['companyNameSnapshot'] as String? ?? '',
+      isDemo: json['isDemo'] as bool? ?? false,
       createdAt: date('createdAt'),
       updatedAt: date('updatedAt'),
       closePhoto: photo('closePhoto'),

@@ -7,11 +7,24 @@ class AuthenticatedOperator {
     required this.uid,
     required this.displayName,
     required this.role,
+    this.companyId = '',
+    this.companyName = '',
+    this.active = true,
+    this.credentialExpiresAt,
   });
 
   final String uid;
   final String displayName;
   final String role;
+  final String companyId;
+  final String companyName;
+  final bool active;
+  final DateTime? credentialExpiresAt;
+
+  bool get providerAccessExpired => role == 'provider' &&
+      (!active ||
+          credentialExpiresAt == null ||
+          !DateTime.now().isBefore(credentialExpiresAt!));
 }
 
 abstract class OperatorSession {
@@ -49,7 +62,11 @@ class FirebaseOperatorSession implements OperatorSession {
     }
 
     var displayName = (user.displayName ?? user.email ?? 'Usuario').trim();
-    var role = 'operator';
+    var role = 'unprovisioned';
+    var companyId = '';
+    var companyName = '';
+    var active = true;
+    DateTime? credentialExpiresAt;
     try {
       final profile = await (_firestore ?? FirebaseFirestore.instance)
           .collection('users')
@@ -59,6 +76,15 @@ class FirebaseOperatorSession implements OperatorSession {
       final data = profile.data();
       final storedName = (data?['displayName'] as String? ?? '').trim();
       final storedRole = (data?['role'] as String? ?? '').trim();
+      companyId = (data?['companyId'] as String? ?? '').trim();
+      companyName = (data?['companyNameSnapshot'] as String? ?? '').trim();
+      active = data?['active'] != false;
+      final expiresAtValue = data?['credentialExpiresAt'];
+      credentialExpiresAt = expiresAtValue is Timestamp
+          ? expiresAtValue.toDate()
+          : expiresAtValue is DateTime
+          ? expiresAtValue
+          : null;
       if (storedName.isNotEmpty) {
         displayName = storedName;
       }
@@ -68,13 +94,25 @@ class FirebaseOperatorSession implements OperatorSession {
         role = storedRole;
       }
     } catch (_) {
-      // Auth remains the source of identity when the profile is unavailable.
+      try {
+        final claims = await user.getIdTokenResult().timeout(timeout);
+        final claimedRole = claims.claims?['role'];
+        if (claimedRole is String &&
+            ['admin', 'operator', 'provider'].contains(claimedRole)) {
+          role = claimedRole;
+          companyId = claims.claims?['companyId'] as String? ?? '';
+        }
+      } catch (_) {}
     }
 
     return AuthenticatedOperator(
       uid: user.uid,
       displayName: displayName,
       role: role,
+      companyId: companyId,
+      companyName: companyName,
+      active: active,
+      credentialExpiresAt: credentialExpiresAt,
     );
   }
 }

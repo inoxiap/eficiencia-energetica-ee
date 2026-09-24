@@ -51,83 +51,12 @@ function validateCredentials(
   }
 }
 
-export const registerOperator = onCall(
-  {region, secrets: [cedulaLookupPepper]},
-  async (request) => {
-    const fullName = text(request.data?.fullName);
-    const nationalId = normalizeNationalId(request.data?.nationalId);
-    const pin = request.data?.pin;
-    if (fullName.length < 3 || fullName.length > 120) {
-      throw new HttpsError("invalid-argument", "Ingresa el nombre completo.");
-    }
-    validateCredentials(nationalId, pin);
-
-    const lookupId = credentialLookupId(
-      nationalId,
-      cedulaLookupPepper.value(),
-    );
-    const credentialRef = db
-      .collection("user_private_credentials")
-      .doc(lookupId);
-    const pinHash = await argon2.hash(pin, argonParameters);
-    const user = await auth.createUser({displayName: fullName, disabled: false});
-
-    try {
-      await db.runTransaction(async (transaction) => {
-        const existing = await transaction.get(credentialRef);
-        if (existing.exists) {
-          throw new HttpsError(
-            "already-exists",
-            "Ya existe un operador con esa cedula.",
-          );
-        }
-        transaction.create(credentialRef, {
-          uid: user.uid,
-          nationalIdLookupHash: lookupId,
-          pinHash,
-          pinHashAlgorithm: "argon2id",
-          pinHashParameters: {
-            memoryCost: argonParameters.memoryCost,
-            timeCost: argonParameters.timeCost,
-            parallelism: argonParameters.parallelism,
-          },
-          failedAttempts: 0,
-          lockedUntil: null,
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-        transaction.create(db.collection("users").doc(user.uid), {
-          uid: user.uid,
-          displayName: fullName,
-          role: "operator",
-          active: true,
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-          schemaVersion: 1,
-        });
-        transaction.create(db.collection("audit_logs").doc(), {
-          eventType: "operator_registered",
-          actorUid: user.uid,
-          actorRole: "operator",
-          targetCollection: "users",
-          targetDocumentId: user.uid,
-          occurredAt: FieldValue.serverTimestamp(),
-          platform: text(request.data?.platform) || "unknown",
-          appVersion: text(request.data?.appVersion) || "unknown",
-          metadata: {},
-        });
-      });
-      await auth.setCustomUserClaims(user.uid, {role: "operator"});
-      const customToken = await auth.createCustomToken(user.uid, {
-        role: "operator",
-      });
-      return {customToken};
-    } catch (error) {
-      await auth.deleteUser(user.uid).catch(() => undefined);
-      throw error;
-    }
-  },
-);
+export const registerOperator = onCall({region}, async () => {
+  throw new HttpsError(
+    "permission-denied",
+    "El registro de usuarios requiere una invitacion del administrador.",
+  );
+});
 
 export const loginOperator = onCall(
   {region, secrets: [cedulaLookupPepper]},

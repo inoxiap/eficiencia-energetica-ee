@@ -33,6 +33,23 @@
       ]
     },
     {
+      "collectionGroup": "steam_trap_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "companyId", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "steam_trap_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "isDemo", "order": "ASCENDING"},
+        {"fieldPath": "sharedWithUids", "arrayConfig": "CONTAINS"},
+        {"fieldPath": "updatedAt", "order": "DESCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "bare_pipe_reports",
       "queryScope": "COLLECTION",
       "fields": [

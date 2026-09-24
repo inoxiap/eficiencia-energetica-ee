@@ -132,6 +132,7 @@ class _SteamTrapModuleScreenState extends State<SteamTrapModuleScreen> {
                     key: ValueKey(_refreshToken),
                     store: widget.store,
                     isAdmin: _user!.role == 'admin',
+                    companyName: _user!.companyName,
                     onEdit: (record) => setState(() {
                       _editing = record;
                       _tab = 0;
@@ -877,11 +878,13 @@ class SteamTrapQueryPanel extends StatefulWidget {
   const SteamTrapQueryPanel({
     required this.store,
     required this.isAdmin,
+    required this.companyName,
     required this.onEdit,
     super.key,
   });
   final SteamTrapStore store;
   final bool isAdmin;
+  final String companyName;
   final ValueChanged<SteamTrapRecord> onEdit;
 
   @override
@@ -963,7 +966,11 @@ class _SteamTrapQueryPanelState extends State<SteamTrapQueryPanel> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          widget.isAdmin ? 'Todos los levantamientos' : 'Mis levantamientos',
+          widget.isAdmin
+              ? 'Todos los levantamientos'
+              : widget.companyName.isEmpty
+              ? 'Mis levantamientos'
+              : 'Levantamientos de ${widget.companyName}',
           style: Theme.of(
             context,
           ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
@@ -1178,6 +1185,10 @@ class _SteamTrapQueryPanelState extends State<SteamTrapQueryPanel> {
                           ),
                         ),
                       ),
+                      if (record.isDemo) ...[
+                        _demoBadge(),
+                        const SizedBox(width: 6),
+                      ],
                       _statusBadge(record.status),
                     ],
                   ),
@@ -1238,6 +1249,22 @@ class _SteamTrapQueryPanelState extends State<SteamTrapQueryPanel> {
           ? 'Borrador'
           : 'Pendiente',
       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+    ),
+  );
+
+  Widget _demoBadge() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(
+      color: const Color(0xffffe1e4),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: const Text(
+      'DEMO',
+      style: TextStyle(
+        color: brandRed,
+        fontSize: 10,
+        fontWeight: FontWeight.w900,
+      ),
     ),
   );
   String _diagnosisLabel(String value) =>

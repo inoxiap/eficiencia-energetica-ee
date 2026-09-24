@@ -136,6 +136,10 @@ class FirebaseSteamTrapStore implements SteamTrapStore {
             'photoProvider': 'cloudinary',
             'ownerUid': user.uid,
             'ownerNameSnapshot': user.displayName,
+            'companyId': user.companyId,
+            'companyNameSnapshot': user.companyName,
+            'isDemo': false,
+            'sharedWithUids': <String>[],
             'createdAt': FieldValue.serverTimestamp(),
             'createdByUid': user.uid,
             'createdByNameSnapshot': user.displayName,
@@ -222,16 +226,44 @@ class FirebaseSteamTrapStore implements SteamTrapStore {
   Future<List<SteamTrapRecord>> loadRecords() async {
     await _firebaseReady.timeout(timeout);
     final user = await _requireUser();
-    Query<Map<String, dynamic>> query = _db.collection('steam_trap_records');
-    if (user.role != 'admin') {
-      query = query.where('ownerUid', isEqualTo: user.uid);
+    final collection = _db.collection('steam_trap_records');
+    if (user.role == 'admin') {
+      final snapshot = await collection
+          .orderBy('updatedAt', descending: true)
+          .limit(500)
+          .get(const GetOptions(source: Source.server))
+          .timeout(timeout);
+      return snapshot.docs.map(_record).toList(growable: false);
     }
-    final snapshot = await query
-        .orderBy('updatedAt', descending: true)
-        .limit(500)
-        .get(const GetOptions(source: Source.server))
-        .timeout(timeout);
-    return snapshot.docs.map(_record).toList(growable: false);
+
+    final queries = <Query<Map<String, dynamic>>>[
+      collection.where('ownerUid', isEqualTo: user.uid),
+      collection.where('isDemo', isEqualTo: true).where(
+        'sharedWithUids',
+        arrayContains: user.uid,
+      ),
+    ];
+    if (user.companyId.isNotEmpty) {
+      queries.add(collection.where('companyId', isEqualTo: user.companyId));
+    }
+    final snapshots = await Future.wait(
+      queries.map(
+        (query) => query
+            .orderBy('updatedAt', descending: true)
+            .limit(500)
+            .get(const GetOptions(source: Source.server))
+            .timeout(timeout),
+      ),
+    );
+    final recordsById = <String, SteamTrapRecord>{};
+    for (final snapshot in snapshots) {
+      for (final document in snapshot.docs) {
+        recordsById[document.id] = _record(document);
+      }
+    }
+    final records = recordsById.values.toList(growable: false)
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return records;
   }
 
   @override

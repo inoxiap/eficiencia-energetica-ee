@@ -3,11 +3,14 @@
 ## Roles
 
 - operator: crea registros, consulta mantenimientos y actualiza su seguimiento.
-- provider: crea y edita sus levantamientos de trampas, y solo consulta o
-  exporta documentos cuyo `ownerUid` coincide con su sesion.
+- provider: solo entra al modulo de trampas; crea registros y edita unicamente
+  los propios. Puede consultar/exportar registros propios y los de su empresa.
+  El acceso vence por `credentialExpiresAt`, validado por reglas de Firestore.
 - admin: lectura global para dashboard y autorizacion de revisiones.
 
-El registro publico nunca asigna admin.
+El registro publico esta deshabilitado. Las cuentas se provisionan por invitacion
+con Firebase Admin SDK; cuentas autenticadas sin perfil/rol asignado no acceden a
+modulos. `companyId` define el grupo de lectura y no otorga permiso de edicion.
 
 ## PIN y cedula
 
@@ -47,11 +50,12 @@ y Secure en produccion, y revalida el rol admin en Firestore.
 
 Las reglas tienen pruebas con Firebase Emulator Suite.
 
-En `steam_trap_records`, las reglas exigen propietario para leer y editar. El
-TAG, ID, propietario y fecha de creacion son inmutables para cualquier cliente.
-Solo un administrador puede corregir la seccion dejando historial. Ningun
-cliente puede borrar registros o alterar consecutivos fuera de incrementos
-unitarios.
+En `steam_trap_records`, proveedores leen por `ownerUid`, `companyId` o una
+comparticion DEMO explicita; editar sigue limitado al propietario. Internos
+autorizados conservan su acceso y admin puede leer globalmente. El TAG, ID,
+propietario, empresa, marca DEMO y fecha de creacion son inmutables para el
+cliente. Solo admin puede corregir la seccion dejando historial. Ningun cliente
+puede borrar registros o alterar consecutivos fuera de incrementos unitarios.
 
 ## Secretos
 
@@ -76,3 +80,7 @@ que un proveedor descubra URLs de otro proveedor, pero una URL ya conocida no
 queda protegida por reglas de Firebase. Para control estricto de descarga se
 requieren activos autenticados y URLs firmadas por un backend que mantenga el
 API secret fuera del cliente. Esto no requiere migrar de proveedor.
+
+Los ejemplos DEMO usan las mismas dos imagenes genericas (cercana y general)
+para todos los registros; se identifican como demostracion y se comparten por
+UID explicito, sin mezclarlos con registros reales de las empresas.

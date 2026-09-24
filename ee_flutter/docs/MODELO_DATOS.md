@@ -215,12 +215,15 @@ Documento users/{uid}:
     nationalId
     role: operator | provider | admin
     active
+    companyId, companyNameSnapshot (proveedores)
+    credentialExpiresAt (proveedores, Timestamp)
     createdAt
     updatedAt
     schemaVersion
 
 No contiene PIN. La cedula se conserva como texto, pero no se usa como ID del
-documento. Registro publico nunca asigna admin.
+documento. El alta publica esta deshabilitada; usuarios y roles se provisionan
+en servidor.
 
 ## steam_trap_records
 
@@ -230,6 +233,7 @@ Inventario fisico y levantamientos de trampas de vapor. Es independiente de
 Campos consultables:
 
     id, tag, ownerUid
+    companyId, companyNameSnapshot, isDemo, sharedWithUids
     sectionCode, sectionId, sectionNameSnapshot
     equipmentName, equipmentNameNormalized, zone
     serviceId, trapTypeId, diameter
@@ -246,6 +250,11 @@ interno distinto del TAG y el consecutivo por seccion vive en
 `steam_trap_counters/{sectionCode}`. Los estados admitidos son `draft`,
 `complete` y `upload_failed`. Una correccion administrativa de seccion conserva
 el TAG original y agrega una entrada a `sectionHistory`.
+
+Proveedores autenticados consultan por propietario o `companyId`; compartir
+lectura no permite editar registros de companeros. Los registros DEMO usan
+`isDemo: true` y `sharedWithUids` explicito. Las fotografias ilustrativas pueden
+reutilizarse entre esos ejemplos y conservan el proveedor Cloudinary.
 
 ## user_private_credentials
 

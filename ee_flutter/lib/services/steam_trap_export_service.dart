@@ -51,6 +51,8 @@ class SteamTrapExportService {
     sheet.appendRow([
       for (final label in const [
         'TAG',
+        'Empresa',
+        'Tipo de registro',
         'Codigo seccion',
         'Seccion',
         'Zona',
@@ -73,6 +75,8 @@ class SteamTrapExportService {
       sheet.appendRow([
         for (final value in [
           record.tag,
+          record.companyName,
+          record.isDemo ? 'DEMOSTRACION' : 'REAL',
           record.sectionCode,
           record.sectionName,
           record.zone,

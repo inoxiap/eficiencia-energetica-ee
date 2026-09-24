@@ -436,8 +436,105 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AppShell(
-      children: [
+    if (_isLoadingUser) {
+      return const AppShell(
+        children: [
+          Center(child: CircularProgressIndicator()),
+        ],
+      );
+    }
+    if (_user == null) {
+      return AppShell(children: _signedOutHome());
+    }
+    if (_user!.role == 'provider') {
+      return AppShell(children: _providerHome());
+    }
+    if (!['operator', 'admin'].contains(_user!.role)) {
+      return AppShell(children: _unprovisionedHome());
+    }
+    return AppShell(children: _internalHome());
+  }
+
+  List<Widget> _signedOutHome() => [
+    const EeHeader(
+      title: 'Eficiencia Energetica EE',
+      subtitle: 'Inicia sesion para continuar.',
+    ),
+    const SizedBox(height: 16),
+    EeActionButton(
+      icon: Icons.login,
+      label: 'Ingresar',
+      onPressed: _openUserAccess,
+    ),
+  ];
+
+  List<Widget> _unprovisionedHome() => [
+    const EeHeader(
+      title: 'Acceso pendiente',
+      subtitle: 'Tu cuenta aun no tiene un perfil asignado.',
+    ),
+    const SizedBox(height: 16),
+    EeActionButton(
+      icon: Icons.logout,
+      label: 'Cerrar sesion',
+      onPressed: _openUserAccess,
+    ),
+  ];
+
+  List<Widget> _providerHome() {
+    if (_user!.providerAccessExpired) {
+      return [
+        const EeHeader(
+          title: 'Acceso vencido',
+          subtitle: 'Contacta al administrador para renovar tu acceso.',
+        ),
+        const SizedBox(height: 16),
+        EeActionButton(
+          icon: Icons.logout,
+          label: 'Cerrar sesion',
+          onPressed: _openUserAccess,
+        ),
+      ];
+    }
+    return [
+      IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              flex: 4,
+              child: EeHeader(
+                title: 'Ingreso Trampas de vapor',
+                subtitle: _user!.companyName.isEmpty
+                    ? _user!.displayName
+                    : '${_user!.displayName} - ${_user!.companyName}',
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: _identityButton()),
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
+      EeActionButton(
+        key: const Key('steam-trap-module-button'),
+        icon: Icons.plumbing_outlined,
+        label: 'Ingreso Trampas de vapor',
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => SteamTrapModuleScreen(
+              store: widget.steamTrapStore,
+              cloudinaryService: widget.cloudinaryService,
+              operatorSession: widget.operatorSession,
+              operatorAuthService: widget.operatorAuthService,
+            ),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _internalHome() => [
         IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -655,9 +752,7 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           },
         ),
-      ],
-    );
-  }
+      ];
 }
 
 class OperatorAccessScreen extends StatefulWidget {
@@ -677,12 +772,7 @@ class OperatorAccessScreen extends StatefulWidget {
 class _OperatorAccessScreenState extends State<OperatorAccessScreen> {
   final _loginNationalIdController = TextEditingController();
   final _loginPinController = TextEditingController();
-  final _registerNameController = TextEditingController();
-  final _registerNationalIdController = TextEditingController();
-  final _registerPinController = TextEditingController();
-  final _registerPinConfirmationController = TextEditingController();
   AuthenticatedOperator? _operator;
-  String _mode = 'login';
   String _message = '';
   MessageType _messageType = MessageType.info;
   var _isLoading = true;
@@ -698,10 +788,6 @@ class _OperatorAccessScreenState extends State<OperatorAccessScreen> {
   void dispose() {
     _loginNationalIdController.dispose();
     _loginPinController.dispose();
-    _registerNameController.dispose();
-    _registerNationalIdController.dispose();
-    _registerPinController.dispose();
-    _registerPinConfirmationController.dispose();
     super.dispose();
   }
 
@@ -753,35 +839,7 @@ class _OperatorAccessScreenState extends State<OperatorAccessScreen> {
   Widget _buildAccessForms() {
     return Column(
       children: [
-        SizedBox(
-          width: double.infinity,
-          child: SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(
-                value: 'login',
-                icon: Icon(Icons.login),
-                label: Text('Ingresar'),
-              ),
-              ButtonSegment(
-                value: 'register',
-                icon: Icon(Icons.person_add_alt_1),
-                label: Text('Registrarse'),
-              ),
-            ],
-            selected: {_mode},
-            onSelectionChanged: _isSubmitting
-                ? null
-                : (selection) {
-                    setState(() {
-                      _mode = selection.single;
-                      _message = '';
-                      _clearPinControllers();
-                    });
-                  },
-          ),
-        ),
-        const SizedBox(height: 14),
-        if (_mode == 'login') _buildLoginForm() else _buildRegistrationForm(),
+        _buildLoginForm(),
       ],
     );
   }
@@ -810,50 +868,6 @@ class _OperatorAccessScreenState extends State<OperatorAccessScreen> {
           icon: Icons.login,
           label: _isSubmitting ? 'Verificando...' : 'Ingresar',
           onPressed: _isSubmitting ? null : _signIn,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRegistrationForm() {
-    return InfoPanel(
-      children: [
-        TextField(
-          controller: _registerNameController,
-          enabled: !_isSubmitting,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(labelText: 'Nombre completo'),
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: _registerNationalIdController,
-          enabled: !_isSubmitting,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          maxLength: 10,
-          decoration: InputDecoration(
-            labelText: 'Cedula',
-            counterText: '',
-            helperText: useFirebaseEmulators
-                ? 'Modo de prueba: se acepta cualquier numero de 10 digitos.'
-                : null,
-          ),
-        ),
-        const SizedBox(height: 14),
-        _pinField(
-          controller: _registerPinController,
-          label: 'PIN de 4 a 6 numeros',
-        ),
-        const SizedBox(height: 14),
-        _pinField(
-          controller: _registerPinConfirmationController,
-          label: 'Confirmar PIN',
-        ),
-        const SizedBox(height: 14),
-        EeActionButton(
-          icon: Icons.person_add_alt_1,
-          label: _isSubmitting ? 'Registrando...' : 'Crear usuario',
-          onPressed: _isSubmitting ? null : _register,
         ),
       ],
     );
@@ -908,31 +922,6 @@ class _OperatorAccessScreenState extends State<OperatorAccessScreen> {
     );
   }
 
-  Future<void> _register() async {
-    final fullName = _registerNameController.text.trim();
-    final nationalId = _registerNationalIdController.text.trim();
-    final pin = _registerPinController.text;
-    if (fullName.length < 3 || nationalId.length != 10 || pin.length < 4) {
-      _setAuthMessage(
-        MessageType.error,
-        'Completa nombre, cedula de 10 digitos y PIN de 4 a 6 numeros.',
-      );
-      return;
-    }
-    if (pin != _registerPinConfirmationController.text) {
-      _setAuthMessage(MessageType.error, 'Los PIN no coinciden.');
-      return;
-    }
-    await _runAuthAction(
-      () => widget.authService.register(
-        fullName: fullName,
-        nationalId: nationalId,
-        pin: pin,
-      ),
-      'Usuario registrado y sesion iniciada.',
-    );
-  }
-
   Future<void> _runAuthAction(
     Future<void> Function() action,
     String successMessage,
@@ -971,7 +960,6 @@ class _OperatorAccessScreenState extends State<OperatorAccessScreen> {
     setState(() {
       _isSubmitting = false;
       _operator = null;
-      _mode = 'login';
       _messageType = MessageType.success;
       _message = 'Sesion cerrada. Ya puedes ingresar con otro usuario.';
     });
@@ -979,14 +967,10 @@ class _OperatorAccessScreenState extends State<OperatorAccessScreen> {
 
   void _clearPinControllers() {
     _loginPinController.clear();
-    _registerPinController.clear();
-    _registerPinConfirmationController.clear();
   }
 
   void _clearAllControllers() {
     _loginNationalIdController.clear();
-    _registerNameController.clear();
-    _registerNationalIdController.clear();
     _clearPinControllers();
   }
 
