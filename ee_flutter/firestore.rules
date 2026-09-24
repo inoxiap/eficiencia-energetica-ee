@@ -15,9 +15,13 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
+    function tokenRole() {
+      return request.auth.token.get('role', '');
+    }
+
     function isProvider() {
       return signedIn() && (
-        request.auth.token.role == 'provider'
+        tokenRole() == 'provider'
         || (userProfileExists() && userProfile().role == 'provider')
       );
     }
@@ -35,7 +39,7 @@ service cloud.firestore {
       return signedIn()
         && !isProvider()
         && (
-          request.auth.token.role in ['operator', 'admin']
+          tokenRole() in ['operator', 'admin']
           || (
             userProfileExists()
             && userProfile().role in ['operator', 'admin']
@@ -62,7 +66,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return signedIn() && (
-        request.auth.token.role == 'admin'
+        tokenRole() == 'admin'
         || (
           exists(/databases/$(database)/documents/users/$(request.auth.uid))
           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'

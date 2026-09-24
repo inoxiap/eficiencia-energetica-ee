@@ -295,6 +295,43 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
 
 ## Bitacora
 
+### 2026-09-24 - Verificacion de permisos administrativos Firebase
+
+- Jeff compartio la pantalla IAM del proyecto `Eficiencia-Energetica-EE`, que
+  muestra `jjordonez14@gmail.com` como propietario y con `Firebase Admin`,
+  `Firebase Authentication Admin` y `Cloud Datastore User`.
+- La sesion Firebase CLI reconoce la misma cuenta y el proyecto
+  `eficiencia-energetica-ee`. Al volver a abrir Authentication, desaparecio el
+  aviso de permiso insuficiente y aparece el boton `Agregar usuario`.
+- Correccion del hallazgo anterior: los roles si estan asignados; el primer
+  resultado correspondia a una vista/estado previo de la consola.
+- El Admin SDK local aun no tiene Application Default Credentials (prueba de
+  lectura devolvio `Could not load the default credentials`). No se modifico
+  produccion ni se crearon cuentas, PINes o documentos en esta verificacion.
+- Para ejecutar los scripts administrativos desde esta computadora falta
+  iniciar ADC de Google Cloud de forma segura, o usar la consola web para las
+  operaciones compatibles. No crear ni guardar claves de servicio.
+
+### 2026-09-24 - Firestore permission-denied en Consulta de trampas
+
+- Jeff pregunto si el dataset de demostracion se habia creado para Maria Vega o
+  para su propia cuenta. La coleccion de produccion `steam_trap_records` esta
+  vacia; no se creo ningun registro DEMO y no hay PIN de demostracion que
+  entregar. El perfil existente de Maria tiene rol interno `operator`.
+- Causa identificada: varias funciones de reglas leian
+  `request.auth.token.role` directamente. Las cuentas creadas con Firebase
+  Email/Password no llevan ese custom claim; acceder una clave ausente produce
+  error de reglas y termina en `permission-denied`, aunque el perfil propio en
+  Firestore tenga el rol `operator`. Referencia oficial:
+  https://firebase.google.com/docs/firestore/security/rules-fields
+- Correccion: `isProvider`, `internalUser` e `isAdmin` ahora usan
+  `request.auth.token.get('role', '')` y conservan el fallback al perfil.
+  Reglas desplegadas correctamente en produccion el 2026-09-24; compilacion de
+  reglas aprobada por Firebase. No se ejecutaron pruebas de reglas.
+- Los registros DEMO y las cuentas de los cuatro proveedores siguen pendientes:
+  Cloud Shell solicita autorizacion para usar las credenciales de Google Cloud
+  y esa autorizacion no se completo. No guardar PINes ni secretos.
+
 ### 2026-07-15 - Plataforma profesional inicial
 
 - Se implementaron autenticacion Firebase simplificada para Spark, usuarios,
