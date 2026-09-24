@@ -1201,7 +1201,7 @@ class _PumpSurveyScreenState extends State<PumpSurveyScreen> {
   }
 
   String _newId() {
-    final random = math.Random().nextInt(1 << 32).toRadixString(16);
+    final random = math.Random().nextInt(1 << 31).toRadixString(16);
     return 'pump-${DateTime.now().microsecondsSinceEpoch}-$random';
   }
 

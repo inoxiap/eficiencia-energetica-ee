@@ -713,7 +713,7 @@ class _SteamTrapEntryPanelState extends State<SteamTrapEntryPanel> {
     if (_recordId != null) return;
     final section = plantSectionByCode(_sectionCode)!;
     _recordId =
-        '${DateTime.now().millisecondsSinceEpoch}-${math.Random().nextInt(1 << 32).toRadixString(16)}';
+        '${DateTime.now().millisecondsSinceEpoch}-${math.Random().nextInt(1 << 31).toRadixString(16)}';
     final record = await widget.store.reserveTag(
       recordId: _recordId!,
       section: section,

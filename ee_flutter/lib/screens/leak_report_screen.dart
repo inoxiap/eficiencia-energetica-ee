@@ -544,7 +544,7 @@ class _LeakReportScreenState extends State<LeakReportScreen> {
   }
 
   String _createReportId() {
-    final random = math.Random().nextInt(1 << 32).toRadixString(16);
+    final random = math.Random().nextInt(1 << 31).toRadixString(16);
     return '${DateTime.now().millisecondsSinceEpoch}-$random';
   }
 }

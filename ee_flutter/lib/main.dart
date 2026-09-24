@@ -1533,7 +1533,7 @@ class _TrapSizingScreenState extends State<TrapSizingScreen> {
   }
 
   String _createTrapReportId() {
-    final random = math.Random().nextInt(1 << 32).toRadixString(16);
+    final random = math.Random().nextInt(1 << 31).toRadixString(16);
     return 'trap-${DateTime.now().microsecondsSinceEpoch}-$random';
   }
 }
@@ -2051,7 +2051,7 @@ class _BarePipeReportScreenState extends State<BarePipeReportScreen> {
   }
 
   String _createReportId() {
-    final random = math.Random().nextInt(1 << 32).toRadixString(16);
+    final random = math.Random().nextInt(1 << 31).toRadixString(16);
     return '${DateTime.now().millisecondsSinceEpoch}-$random';
   }
 }

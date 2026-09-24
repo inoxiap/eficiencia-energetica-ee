@@ -16,7 +16,7 @@ o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
   `https://github.com/inoxiap/eficiencia-energetica-ee.git`
 - Rama principal: `main`.
 - Aplicacion activa: `ee_flutter/`.
-- Version Flutter actual: `1.7.1+12`.
+- Version Flutter actual: `1.7.2+13`.
 - La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
   historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
 
@@ -294,6 +294,25 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   descartarlo sin instruccion expresa de Jeff.
 
 ## Bitacora
+
+### 2026-09-24 - Correccion de RangeError al revisar trampas desde web movil
+
+- Incidente: un proveedor en navegador movil recibio `RangeError: max must be
+  in range 0 < max <= 2^32, was 0` al intentar revisar su levantamiento. No
+  correspondia a la nomenclatura de una trampa ni a Firestore.
+- Diagnostico: los IDs temporales combinaban el timestamp con
+  `Random.nextInt(1 << 32)`. El limite no es valido en el runtime JavaScript
+  de Flutter Web, por lo que el flujo fallaba antes de reservar el TAG.
+- Correccion: el limite se cambio a `1 << 31` en trampas, fugas, bombas y los
+  dos generadores historicos de `main.dart`. El timestamp conserva la
+  unicidad practica del identificador; no se modificaron IDs existentes.
+- Pruebas: pruebas focalizadas de trampas, fugas y bombas aprobadas; `flutter
+  analyze --no-pub --no-fatal-infos` sin hallazgos y `flutter build web
+  --release` correcto.
+- Despliegue: Hosting productivo publicado. Se verifico la descarga de
+  `main.dart.js` desde `https://eficiencia-energetica-ee.web.app` con HTTP 200
+  y el artefacto actualizado. Android permanece en el release 1.7.1 hasta la
+  siguiente publicacion de APK.
 
 ### 2026-09-24 - Compatibilidad de guardado de trampas en Android 1.6
 
