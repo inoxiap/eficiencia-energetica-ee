@@ -75,17 +75,24 @@ service cloud.firestore {
     }
 
     function canReadSteamTrap() {
-      return hasTrapAccess() && (
-        resource.data.ownerUid == request.auth.uid
-        || (
-          resource.data.companyId is string
-          && resource.data.companyId.size() > 0
-          && resource.data.companyId == currentCompanyId()
-        )
-        || (
-          resource.data.isDemo == true
-          && resource.data.sharedWithUids is list
-          && resource.data.sharedWithUids.hasAny([request.auth.uid])
+      // Personal interno consulta el inventario completo. Los proveedores
+      // permanecen limitados a sus propios registros, su empresa y DEMO
+      // compartidos explicitamente.
+      return internalUser() || (
+        isProvider()
+        && providerCredentialIsValid()
+        && (
+          resource.data.ownerUid == request.auth.uid
+          || (
+            resource.data.companyId is string
+            && resource.data.companyId.size() > 0
+            && resource.data.companyId == currentCompanyId()
+          )
+          || (
+            resource.data.isDemo == true
+            && resource.data.sharedWithUids is list
+            && resource.data.sharedWithUids.hasAny([request.auth.uid])
+          )
         )
       );
     }

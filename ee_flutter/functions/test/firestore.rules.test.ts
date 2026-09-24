@@ -532,7 +532,7 @@ describe("Firestore rules", () => {
     );
   });
 
-  it("allows explicitly shared demonstration records only", async () => {
+  it("allows internal staff to read the inventory and keeps providers scoped", async () => {
     await environment.withSecurityRulesDisabled(async (context) => {
       await setDoc(
         doc(context.firestore(), "steam_trap_records/demo-1"),
@@ -557,10 +557,19 @@ describe("Firestore rules", () => {
       orderBy("updatedAt", "desc"),
     ));
     if (demoRows.size !== 1) throw new Error("Expected one shared demo record.");
-    const other = environment
+    const otherInternalUser = environment
       .authenticatedContext("other-uid", {role: "operator"})
       .firestore();
-    await assertFails(getDoc(doc(other, "steam_trap_records/demo-1")));
+    await assertSucceeds(
+      getDoc(doc(otherInternalUser, "steam_trap_records/demo-1")),
+    );
+    await seedProvider("provider-unshared", "hivimar");
+    const unsharedProvider = environment
+      .authenticatedContext("provider-unshared", {role: "provider"})
+      .firestore();
+    await assertFails(
+      getDoc(doc(unsharedProvider, "steam_trap_records/demo-1")),
+    );
   });
 
   it("allows admins to read all steam-trap records", async () => {

@@ -1,12 +1,12 @@
-import 'dart:typed_data';
-
 import 'package:archive/archive.dart';
 import 'package:archive/archive_io.dart';
 import 'package:excel/excel.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 
 import '../domain/steam_trap_entry.dart';
+import 'file_download.dart';
 
 class SteamTrapExportService {
   const SteamTrapExportService();
@@ -137,8 +137,12 @@ class SteamTrapExportService {
     required Uint8List bytes,
     required String fileName,
     required String mimeType,
-  }) {
-    return SharePlus.instance.share(
+  }) async {
+    if (kIsWeb) {
+      downloadFile(bytes: bytes, fileName: fileName, mimeType: mimeType);
+      return;
+    }
+    await SharePlus.instance.share(
       ShareParams(
         files: [XFile.fromData(bytes, mimeType: mimeType)],
         fileNameOverrides: [fileName],

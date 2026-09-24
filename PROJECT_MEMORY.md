@@ -1,6 +1,6 @@
 # Memoria del proyecto: Eficiencia Energetica EE
 
-Ultima actualizacion: 2026-09-23
+Ultima actualizacion: 2026-09-24
 
 Este documento es la memoria operativa persistente del proyecto. Debe leerse
 completo al iniciar o retomar cualquier tarea y actualizarse al terminar cambios
@@ -294,6 +294,91 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   descartarlo sin instruccion expresa de Jeff.
 
 ## Bitacora
+
+### 2026-09-24 - Provisionamiento productivo de proveedores y dataset DEMO
+
+- Continuacion del trabajo autorizado por Jeff: se crearon en Firebase
+  Authentication cuatro cuentas de proveedor y sus perfiles en `users`. Se
+  asignaron a Hivimar (1 cuenta) y La Llave (3 cuentas), con rol `provider` y
+  vencimiento de credenciales el 2026-12-01 a las 00:00 de America/Guayaquil.
+  Los PIN temporales se generaron al azar y se entregaron a Jeff en el chat;
+  no se registran aqui ni en Git.
+- Se crearon cuatro documentos identificados como DEMO en
+  `steam_trap_records`, con dos fotografias genericas cargadas al Cloudinary
+  existente y reutilizadas en todos los ejemplos. Los registros estan
+  compartidos unicamente con la cuenta de Jeff mediante `sharedWithUids` y se
+  identifican claramente como demostracion, no como equipos reales.
+- Verificacion de solo lectura en produccion: 4 perfiles con rol `provider`; 4
+  documentos DEMO existentes, cada uno con `isDemo: true`, dos referencias de
+  foto y exactamente un UID compartido. El script confirmo la creacion de 4
+  registros y 2 fotografias.
+- Operacion: se uso el Cloud Shell autenticado de Jeff; no se desplegaron
+  cambios de codigo ni reglas en esta tarea. Se eliminaron los archivos
+  temporales de cédulas y la imagen de Cloud Shell. Ningun PIN, clave o cédula
+  se agrego a archivos del repositorio.
+- Pendiente: Jeff debe entregar los PIN temporales directamente a cada
+  proveedor. La consulta/descarga del dataset DEMO se puede probar desde la
+  cuenta de Jeff en el modulo de trampas; los proveedores no tienen acceso a
+  esos demos.
+
+### 2026-09-24 - Correccion de consulta de trampas bloqueada por Firestore
+
+- Incidente: la pestaña Consulta mostraba `permission-denied` y no permitia
+  exportar, incluso para una sesion interna valida. Se reprodujo en produccion
+  con la sesion de Maria Vega despues de recargar la aplicacion.
+- Diagnostico: los DEMO, el perfil de Jeff y sus referencias compartidas eran
+  correctos. La expresion de lectura de `steam_trap_records` combinaba las
+  condiciones internas y de proveedor en una unica rama; Firestore rechazaba
+  algunas consultas de inventario aunque el usuario interno estuviera
+  autenticado correctamente.
+- Correccion: las reglas ahora permiten consulta completa del inventario al
+  personal interno (`operator` y `admin`). Los proveedores siguen limitados a
+  registros propios, de su empresa o DEMO compartidos explicitamente, y no
+  pueden editar registros ajenos.
+- Verificacion: las reglas compilaron y se publicaron en produccion el
+  2026-09-24. Despues de recargar, Consulta con Maria Vega muestra el estado
+  vacio normal sin error. Maria no ve los DEMO porque se compartieron solo con
+  Jeff; la cuenta de Jeff puede ver los cuatro DEMO y usarlos para las
+  exportaciones.
+- Archivos: `ee_flutter/firestore.rules` y
+  `ee_flutter/functions/test/firestore.rules.test.ts`. Se agrego una prueba
+  que conserva el bloqueo de un proveedor sin acceso compartido.
+
+### 2026-09-24 - Descargas web de inventario de trampas
+
+- Incidente: al exportar desde Flutter Web aparecia
+  `MissingPluginException` para el canal de `share_plus`. El archivo se
+  generaba, pero el plugin intentaba invocar el panel nativo de compartir, que
+  no existe en ese destino web.
+- Correccion: `SteamTrapExportService` usa descarga directa del navegador para
+  Excel y ZIP cuando la plataforma es web. Android conserva `share_plus` y su
+  comportamiento de compartir archivos.
+- Archivos: `ee_flutter/lib/services/file_download.dart`,
+  `file_download_stub.dart`, `file_download_web.dart` y
+  `steam_trap_export_service.dart`.
+- Pruebas: `flutter analyze --no-pub` sin hallazgos; prueba focalizada
+  `steam_trap_entry_test.dart` aprobada. Se compilo el build web release y se
+  publico Hosting en produccion.
+- Verificacion productiva: Jeff inicio sesion y pudo cargar los 4 DEMO,
+  descargar Excel y descargar el ZIP de fotografias desde Consulta, sin la
+  tira negra ni errores de consola.
+
+### 2026-09-24 - Consulta de trampas visible tambien en Android
+
+- Incidente: en Android se mostraba una consulta vacia mientras la misma
+  cuenta interna veia los cuatro registros DEMO en la web.
+- Correccion: el cliente ahora trata a todos los usuarios internos como
+  lectores del inventario completo. Los proveedores conservan consultas
+  restringidas a sus registros, los de su empresa y DEMO compartidos.
+- Prueba real: se recompilo e instalo la app en el AVD Pixel 8 API 30, se
+  inicio sesion con la cuenta interna de Jeff y `Trampas de vapor > Consulta`
+  mostro los cuatro registros DEMO con sus miniaturas. No se registraron
+  errores de Firestore en Android.
+- Version preparada: `1.7.1+12`; `flutter analyze --no-pub` sin hallazgos,
+  prueba focalizada de trampas aprobada y builds release Android/web correctos.
+  Hosting se publico con la correccion. Falta publicar el APK en GitHub y
+  elevar `app_config/mobile_app` para que el aviso de actualizacion llegue a
+  dispositivos Android.
 
 ### 2026-09-24 - Verificacion de permisos administrativos Firebase
 

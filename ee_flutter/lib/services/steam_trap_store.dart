@@ -227,7 +227,9 @@ class FirebaseSteamTrapStore implements SteamTrapStore {
     await _firebaseReady.timeout(timeout);
     final user = await _requireUser();
     final collection = _db.collection('steam_trap_records');
-    if (user.role == 'admin') {
+    // Firestore rules grant the plant's internal users visibility of the full
+    // inventory. Providers remain scoped below to their own company records.
+    if (user.role != 'provider') {
       final snapshot = await collection
           .orderBy('updatedAt', descending: true)
           .limit(500)
