@@ -374,11 +374,11 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   inicio sesion con la cuenta interna de Jeff y `Trampas de vapor > Consulta`
   mostro los cuatro registros DEMO con sus miniaturas. No se registraron
   errores de Firestore en Android.
-- Version preparada: `1.7.1+12`; `flutter analyze --no-pub` sin hallazgos,
+- Version publicada: `1.7.1+12`; `flutter analyze --no-pub` sin hallazgos,
   prueba focalizada de trampas aprobada y builds release Android/web correctos.
-  Hosting se publico con la correccion. Falta publicar el APK en GitHub y
-  elevar `app_config/mobile_app` para que el aviso de actualizacion llegue a
-  dispositivos Android.
+  Hosting y GitHub Release `v1.7.1` se publicaron; el APK responde HTTP 200.
+  Falta elevar `app_config/mobile_app` para que el aviso de actualizacion
+  llegue automaticamente a dispositivos Android.
 
 ### 2026-09-24 - Verificacion de permisos administrativos Firebase
 
