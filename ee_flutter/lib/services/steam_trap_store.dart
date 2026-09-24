@@ -78,6 +78,17 @@ class FirebaseSteamTrapStore implements SteamTrapStore {
 
   FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
 
+  Future<String> _appVersion() async {
+    try {
+      final package = await PackageInfo.fromPlatform().timeout(timeout);
+      return '${package.version}+${package.buildNumber}';
+    } catch (_) {
+      // La trazabilidad no debe impedir una captura cuando un navegador movil
+      // no expone los metadatos de PackageInfo.
+      return 'unavailable';
+    }
+  }
+
   @override
   Future<SteamTrapRecord> reserveTag({
     required String recordId,
@@ -85,7 +96,7 @@ class FirebaseSteamTrapStore implements SteamTrapStore {
   }) async {
     await _firebaseReady.timeout(timeout);
     final user = await _requireUser();
-    final package = await PackageInfo.fromPlatform().timeout(timeout);
+    final appVersion = await _appVersion();
     final document = _db.collection('steam_trap_records').doc(recordId);
     final counter = _db.collection('steam_trap_counters').doc(section.code);
 
@@ -145,7 +156,7 @@ class FirebaseSteamTrapStore implements SteamTrapStore {
             'createdByNameSnapshot': user.displayName,
             'updatedAt': FieldValue.serverTimestamp(),
             'updatedByUid': user.uid,
-            'appVersion': '${package.version}+${package.buildNumber}',
+            'appVersion': appVersion,
             'platform': kIsWeb ? 'web' : 'android',
             'schemaVersion': 1,
             'source': 'manual',
@@ -167,7 +178,7 @@ class FirebaseSteamTrapStore implements SteamTrapStore {
   Future<void> saveRecord(SteamTrapRecordInput input) async {
     await _firebaseReady.timeout(timeout);
     final user = await _requireUser();
-    final package = await PackageInfo.fromPlatform().timeout(timeout);
+    final appVersion = await _appVersion();
     final document = _db.collection('steam_trap_records').doc(input.id);
     await _db
         .runTransaction<void>((transaction) async {
@@ -206,7 +217,7 @@ class FirebaseSteamTrapStore implements SteamTrapStore {
             'generalPhoto': input.generalPhoto?.toJson(),
             'updatedAt': FieldValue.serverTimestamp(),
             'updatedByUid': user.uid,
-            'appVersion': '${package.version}+${package.buildNumber}',
+            'appVersion': appVersion,
           });
         })
         .timeout(timeout);

@@ -710,14 +710,15 @@ class _SteamTrapEntryPanelState extends State<SteamTrapEntryPanel> {
   }
 
   Future<void> _ensureReservation() async {
-    if (_recordId != null) return;
+    if (_recordId != null && _tag != null) return;
     final section = plantSectionByCode(_sectionCode)!;
-    _recordId =
+    final recordId = _recordId ??
         '${DateTime.now().millisecondsSinceEpoch}-${math.Random().nextInt(1 << 31).toRadixString(16)}';
     final record = await widget.store.reserveTag(
-      recordId: _recordId!,
+      recordId: recordId,
       section: section,
     );
+    _recordId = recordId;
     _tag = record.tag;
   }
 
@@ -806,7 +807,7 @@ class _SteamTrapEntryPanelState extends State<SteamTrapEntryPanel> {
       });
       if (status == 'complete') widget.onCompleted();
     } catch (error) {
-      if (_recordId != null && status == 'complete') {
+      if (_recordId != null && _tag != null && status == 'complete') {
         try {
           await widget.store.saveRecord(_input('upload_failed'));
         } catch (_) {}

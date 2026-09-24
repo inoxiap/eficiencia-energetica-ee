@@ -16,7 +16,7 @@ o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
   `https://github.com/inoxiap/eficiencia-energetica-ee.git`
 - Rama principal: `main`.
 - Aplicacion activa: `ee_flutter/`.
-- Version Flutter actual: `1.7.2+13`.
+- Version Flutter actual: `1.7.3+14`.
 - La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
   historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
 
@@ -294,6 +294,28 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   descartarlo sin instruccion expresa de Jeff.
 
 ## Bitacora
+
+### 2026-09-24 - Reintento seguro de reserva de TAG para proveedores
+
+- Incidente: despues de un error inicial, la captura de Melisa Chavarrea
+  mostraba un error JavaScript generico y despues `Null check operator used on
+  a null value` al confirmar. El perfil de Melisa esta activo, vigente y
+  asociado a Hivimar; el contador de la seccion 10 no existe aun, que es un
+  estado valido para asignar el primer TAG.
+- Diagnostico: la pantalla conservaba el ID temporal antes de confirmar la
+  reserva. Si esa reserva fallaba, los reintentos posteriores la omitian y el
+  manejador de errores intentaba crear un estado de fallo usando un TAG nulo.
+- Correccion: la reserva solo se confirma en estado local despues de recibir el
+  TAG de Firestore; si no hay TAG se reintenta la reserva. El registro de
+  fallo ya no se intenta con datos incompletos. Ademas `PackageInfo` tiene un
+  valor de trazabilidad alterno para que una limitacion de navegador movil no
+  bloquee el guardado.
+- Pruebas: pruebas focalizadas de modulo y dominio de trampas aprobadas;
+  `flutter analyze --no-pub --no-fatal-infos` sin hallazgos y web release
+  compilada correctamente.
+- Despliegue: Hosting publicado en produccion como version de fuente
+  `1.7.3+14`. Android continua en el release 1.7.1 hasta la siguiente
+  publicacion de APK.
 
 ### 2026-09-24 - Correccion de RangeError al revisar trampas desde web movil
 
