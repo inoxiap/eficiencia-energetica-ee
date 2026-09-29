@@ -66,10 +66,8 @@ necesitar criterio tecnico avanzado para completar un levantamiento.
 - Plan Firebase: Spark.
 - Web/PWA:
   `https://eficiencia-energetica-ee.web.app`
-- Android vigente:
-  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/tag/v1.7.0`.
-- `app_config/mobile_app` aun requiere elevar el numero anunciado a build 11;
-  el ultimo valor conocido era `1.6.0+10`.
+- Android vigente: release `v1.7.4`, build 15, publicado en GitHub.
+- `app_config/mobile_app` anuncia Android y web `1.7.4`, build 15.
 - Firebase Hosting publica `ee_flutter/build/web`.
 - El proveedor Firebase Authentication Email/Password fue habilitado y probado
   en produccion el 2026-07-16.
@@ -1381,6 +1379,26 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
 - Archivos principales: reglas, indices, `operator_session.dart`, `main.dart`,
   `steam_trap_store.dart`, `steam_trap_export_service.dart`, scripts de
   provision/seed, modelos y docs de seguridad/datos.
+
+### 2026-09-28 - Altas de proveedores Tuval
+
+- Solicitud autorizada por Jeff: crear dos cuentas de proveedor para Tuval,
+  con PIN temporal aleatorio y vencimiento al 2026-12-01.
+- Resultado: se crearon las cuentas de Christopher Leonadro Acosta Ordoñez y
+  Henry David Huaraca Colcha en Firebase Authentication y sus perfiles en
+  `users`, rol `provider`, empresa `tuval`, activos y con expiracion
+  `2026-12-01T05:00:00Z` (00:00 de America/Guayaquil). Las cédulas pasaron la
+  validacion ecuatoriana del provisionador.
+- El terminal se cerro antes de retener la primera salida con PINes; se
+  verificaron las dos altas por fecha de creacion, nombre y perfil, y se
+  asignaron PIN temporales aleatorios nuevos. Se agregaron eventos de auditoria
+  para la reposicion inicial. Los PIN fueron entregados a Jeff en el chat y no
+  se guardan en el repositorio ni en Firestore.
+- Acceso: limitado al modulo de trampas y a lecturas compartidas dentro de la
+  empresa Tuval; no tienen acceso a modulos internos. No se modificaron reglas,
+  código ni Hosting.
+- Pruebas: verificacion Admin SDK en produccion de Auth y perfiles; no se
+  probo un inicio de sesion de usuario final.
 
 ## Plantilla para futuras entradas
 
