@@ -1978,6 +1978,21 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
 - Decision: el factor 274 es una regla operativa de planta confirmada por el
   usuario, no una conversion fisica general. No se guardan secretos ni PIN.
 
+### 2026-10-05 - Publicacion 1.7.11 y alta administrativa
+
+- Solicitud: publicar la correccion de agua/vapor en web y Android y crear un
+  usuario nuevo con los mismos permisos administrativos del usuario de Jeff.
+- Resultado: Firebase Hosting publicado con `1.7.11`; APK `v1.7.11` build 22
+  publicado en GitHub Release. Se actualizo `app_config/mobile_app` para web y
+  Android con build 22 y el enlace del APK; `forceUpdate` permanece en `false`.
+- Cuenta: se creo en Firebase Authentication y en `users` un perfil activo con
+  rol `admin`, con auditoria en `audit_logs`. El PIN no se guarda en memoria,
+  Git, Firestore, logs ni documentacion.
+- Verificacion: autenticacion de la cuenta creada aprobada; Hosting y APK
+  respondieron HTTP 200, y el APK devolvio el tipo correcto. Accion de GitHub
+  de publicacion termino exitosamente.
+- Commit: `bd95db1` en `main`; release Android `v1.7.11`.
+
 ## Plantilla para futuras entradas
 
 ```markdown
