@@ -16,7 +16,7 @@ o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
   `https://github.com/inoxiap/eficiencia-energetica-ee.git`
 - Rama principal: `main`.
 - Aplicacion activa: `ee_flutter/`.
-- Version Flutter web y Android publicada: `1.7.9+20`.
+- Version Flutter web y Android publicada: `1.7.10+21`.
 - La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
   historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
 
@@ -66,8 +66,9 @@ necesitar criterio tecnico avanzado para completar un levantamiento.
 - Plan Firebase: Spark.
 - Web/PWA:
   `https://eficiencia-energetica-ee.web.app`
-- Android vigente: release `v1.7.9`, build 20, publicado en GitHub.
-- `app_config/mobile_app` anuncia Android y web `1.7.9`, build 20.
+- Android vigente: release `v1.7.10`, build 21, publicado en GitHub.
+- El aviso de `app_config/mobile_app` aun anuncia Android y web `1.7.9`,
+  build 20; actualizarlo requiere autorizacion administrativa de Google Cloud.
 - Firebase Hosting publica `ee_flutter/build/web`.
 - El proveedor Firebase Authentication Email/Password fue habilitado y probado
   en produccion el 2026-07-16.
@@ -1864,6 +1865,77 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
 - Limite de validacion: el emulador Pixel 8 tuvo pantalla vacia por errores
   Impeller/GLES tras reinstalar debug; no se confirma un recorrido visual
   posterior al despliegue. No se modificaron registros de consumo.
+
+### 2026-10-05 - Verificacion y ajuste de lecturas normalizadas
+
+- Solicitud: abrir en el emulador Android y comprobar por que no aparecen todas
+  las lecturas normalizadas.
+- Emulador: se encontro instalado Android 1.7.9+20 y se entro a Registros de
+  consumos de Alfa Laval. El historial indica 235 horas normalizadas y presenta
+  15 por pagina; el codigo ofrece “Cargar 15 mas”. Se reprodujeron filas vacias
+  y totales normalizados que no corresponden con las lecturas acumuladas
+  visibles de las 08:06, 10:02, 11:02, 12:01 y 14:05.
+- Causa corregida localmente: el normalizador priorizaba campos auxiliares
+  canonicos, aunque las pantallas de tomas reales muestran el valor bruto del
+  instrumento. Ahora parte del valor bruto cuando la unidad es conocida,
+  aplicando galones, contador de agua x10 L y kg; los campos canonicos quedan
+  como compatibilidad si el dato original no permite interpretar la unidad.
+- Correccion del calculo: la asignacion uniforme por cada intervalo ya no
+  descarta la fraccion de hora observada; prorratea el delta por el tiempo
+  cubierto y estima el equivalente a 60 minutos. Se crean y conservan todas
+  las horas del rango, incluidas las que quedan sin delta valido por reinicio.
+- Archivos: `ee_flutter/lib/domain/boiler_hourly_normalization.dart`,
+  `ee_flutter/test/boiler_hourly_normalization_test.dart`.
+- Pruebas/builds: `flutter test --no-pub` (69 aprobadas),
+  `flutter analyze --no-pub` sin hallazgos, APK release y web release
+  compilados correctamente. Se agregaron pruebas para preferir el valor bruto
+  con unidad conocida, estimar horas parcialmente cubiertas y mantener horas
+  sin delta calculable.
+- Emulador: se liberó espacio e instaló la compilación local en Pixel 8 API 35.
+  La consulta ahora muestra valores en 14:00, 13:00, 12:00 y 11:00, incluyendo
+  264, 265, 287 y 301 gal de búnker, en lugar de guiones en 11:00-13:00. La
+  pantalla indica “Mostrando 15 de 236 horas”; el resto se consulta con
+  “Cargar 15 más”.
+- Despliegue/datos: ninguno. El APK instalado conserva la versión 1.7.9+20,
+  aunque contiene los cambios locales de este build. No se escribio ni altero
+  informacion en Firestore; web y Android no se publicaron.
+- Diagnostico temporal: se probo desactivar Impeller en el manifiesto para abrir
+  el AVD; el cambio fue revertido y no forma parte de la modificacion final.
+- Aclaracion del usuario: no se deben eliminar horas sin valor calculable.
+  Se conserva la linea de tiempo; se eliminaron filtros que habrian ocultado
+  horas con cobertura parcial o reinicios y se agregaron pruebas para mantener
+  esos renglones visibles. El estimado por hora usa consumo observado dividido
+  para el tiempo cubierto y multiplicado por 60 minutos. Los renglones sin
+  ningun tramo valido permanecen visibles con guion. El objetivo es
+  prorratear por regla de tres entre cada hora cerrada, no reducir la lista
+  quitando huecos.
+- Precision funcional confirmada: cada delta entre dos tomas consecutivas debe
+  distribuirse uniformemente sobre todo el tiempo transcurrido y sumarse en
+  todas las horas que atraviese; las fracciones de intervalos vecinos se
+  combinan para estimar cada hora cerrada. No calcular solo las horas cercanas
+  a las tomas ni saltar horas intermedias.
+
+### 2026-10-05 - Publicacion de normalizacion horaria 1.7.10
+
+- Solicitud: publicar la correccion que prorratea los deltas de cada lectura
+  acumulada en todas las horas cerradas intermedias, tanto en la app web como
+  Android.
+- Resultado: Flutter Web `1.7.10+21` desplegado en Firebase Hosting. APK
+  `v1.7.10` build 21 publicado como release de GitHub.
+- Archivos funcionales: `ee_flutter/pubspec.yaml`,
+  `ee_flutter/lib/domain/boiler_hourly_normalization.dart` y
+  `ee_flutter/test/boiler_hourly_normalization_test.dart`.
+- Pruebas/builds: 69 pruebas Flutter aprobadas; `flutter analyze --no-pub` sin
+  hallazgos; build release web y APK aprobados. GitHub Actions de publicacion
+  termino en exito. Commit de codigo `c82cfba` en `main`.
+- Despliegue: Hosting publicado en `https://eficiencia-energetica-ee.web.app`;
+  release Android en
+  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/tag/v1.7.10`.
+- Pendiente: actualizar `app_config/mobile_app` para que los dispositivos
+  Android reciban el aviso automatico. La CLI de Firebase permite desplegar
+  Hosting, pero la sesion de gcloud no tenia una cuenta activa. Se abrio el
+  consentimiento de Google Cloud para el usuario autorizado; no se aceptaron
+  permisos en su nombre ni se modificaron documentos de Firestore.
 
 ## Plantilla para futuras entradas
 
