@@ -1939,6 +1939,18 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   devolvio `application/vnd.android.package-archive`. La accion de GitHub
   `37379481071` termino con exito.
 
+### 2026-10-05 - Restablecimiento de PIN de calderista
+
+- Solicitud: restablecer el acceso del usuario asociado a la cedula indicada
+  por Jeff, conservando sus permisos para registrar consumos de calderas.
+- Verificacion: el perfil productivo corresponde a un usuario activo con rol
+  `operator`; su UID y perfil no fueron reemplazados. Firebase Authentication
+  acepto el nuevo acceso temporal para el mismo UID.
+- Seguridad: el PIN temporal no se guarda en Git, memoria del proyecto,
+  Firestore ni logs. Se agrego un evento `operator_pin_reset` en
+  `audit_logs`, dejando constancia de que el rol y estado activo se conservaron.
+- Despliegue: no se modifico codigo, reglas ni datos de consumos.
+
 ## Plantilla para futuras entradas
 
 ```markdown
