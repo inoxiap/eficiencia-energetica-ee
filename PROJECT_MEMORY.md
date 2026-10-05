@@ -1,6 +1,6 @@
 # Memoria del proyecto: Eficiencia Energetica EE
 
-Ultima actualizacion: 2026-10-02
+Ultima actualizacion: 2026-10-05
 
 Este documento es la memoria operativa persistente del proyecto. Debe leerse
 completo al iniciar o retomar cualquier tarea y actualizarse al terminar cambios
@@ -16,8 +16,7 @@ o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
   `https://github.com/inoxiap/eficiencia-energetica-ee.git`
 - Rama principal: `main`.
 - Aplicacion activa: `ee_flutter/`.
-- Version Flutter web actual: `1.7.5+16`; Android release instalado/publicado
-  continua en `1.7.4+15`.
+- Version Flutter web y Android publicada: `1.7.6+17`.
 - La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
   historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
 
@@ -1612,6 +1611,23 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   catalogo de zonas aprobada; APK debug compilada e instalada en
   `emulator-5554`; `git diff --check` aprobado.
 - Despliegue: ninguno. La APK instalada es solo de prueba local.
+
+### 2026-10-05 - Publicacion de registro de mantenimiento y APK 1.7.6
+
+- Solicitud: publicar la actualizacion aprobada, compartir el instalador y el
+  enlace de la aplicacion.
+- Resultado: se publico Flutter Web `1.7.6+17` en Hosting; se publicaron las
+  reglas Firestore e indices, incluyendo el autorregistro de mantenimiento;
+  se actualizo `app_config/mobile_app` para que la app detecte la nueva version.
+- Instalador: release GitHub `v1.7.6` con APK Android de 59.5 MB. La URL
+  queda en `androidUpdateUrl` y no se guardan credenciales en el repositorio.
+- Versionamiento: commit `b9e6a71` en `main`; APK build 17 y version web 1.7.6.
+- Verificacion: Hosting respondio HTTP 200; el enlace APK respondio HTTP 200
+  con `application/vnd.android.package-archive`; las reglas compilaron y se
+  liberaron correctamente.
+- Nota: Firebase Hosting Spark rechazo temporalmente el APK dentro de
+  `build/web` por la restriccion de ejecutables; se retiro ese archivo y la web
+  se publico correctamente. El instalador se entrega desde GitHub Releases.
 
 ## Plantilla para futuras entradas
 
