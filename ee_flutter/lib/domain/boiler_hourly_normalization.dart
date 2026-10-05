@@ -42,7 +42,10 @@ class BoilerHourlyNormalizer {
     final buckets = <_HourAccumulator>[];
     final bucketsByEnd = <DateTime, _HourAccumulator>{};
     var hourEnd = guayaquilHourStart(lastAt);
-    while (!hourEnd.subtract(const Duration(hours: 1)).isBefore(firstAt)) {
+    final firstHourEnd = guayaquilHourStart(
+      firstAt,
+    ).add(const Duration(hours: 1));
+    while (!hourEnd.isBefore(firstHourEnd)) {
       final bucket = _HourAccumulator(hourEnd);
       buckets.add(bucket);
       bucketsByEnd[hourEnd] = bucket;
@@ -99,10 +102,7 @@ class BoilerHourlyNormalizer {
       }
     }
 
-    return buckets
-        .where((bucket) => !bucket.valuesAreEmpty)
-        .map((bucket) => bucket.toReading())
-        .toList(growable: false);
+    return buckets.map((bucket) => bucket.toReading()).toList(growable: false);
   }
 }
 
@@ -117,6 +117,22 @@ extension on _Metric {
     };
     final input = reading.originalInputs[inputName];
     if (input is Map) {
+      final raw = input['value'];
+      final rawValue = raw is num ? raw.toDouble() : double.tryParse('$raw');
+      final unit = input['unit']?.toString();
+      if (rawValue != null) {
+        final enteredValue = switch ((this, unit)) {
+          (_Metric.bunker, 'gal') => rawValue,
+          (_Metric.bunker, 'L') => rawValue / alfaBunkerLitersPerGallon,
+          (_Metric.water, 'gal') => rawValue,
+          (_Metric.water, 'counter_x10_L') =>
+            rawValue * alfaWaterGallonsPerCounterUnit,
+          (_Metric.water, 'L') => rawValue / alfaBunkerLitersPerGallon,
+          (_Metric.steam, 'kg') => rawValue,
+          _ => null,
+        };
+        if (enteredValue != null) return enteredValue;
+      }
       final canonical = input[canonicalName];
       if (canonical is num) return canonical.toDouble();
       final parsed = double.tryParse('$canonical');
@@ -142,8 +158,6 @@ class _HourAccumulator {
   final Map<_Metric, double> _values = {};
   final Map<_Metric, int> _coverageMs = {};
 
-  bool get valuesAreEmpty => _values.isEmpty;
-
   void add(
     _Metric metric,
     double? previous,
@@ -157,13 +171,19 @@ class _HourAccumulator {
     _coverageMs[metric] = (_coverageMs[metric] ?? 0) + overlapMs;
   }
 
-  double? _completeValue(_Metric metric) =>
-      _coverageMs[metric] == _hourMs ? _values[metric] : null;
+  double? _hourlyEstimate(_Metric metric) {
+    final coverage = _coverageMs[metric];
+    final observedConsumption = _values[metric];
+    if (coverage == null || coverage <= 0 || observedConsumption == null) {
+      return null;
+    }
+    return observedConsumption * _hourMs / coverage;
+  }
 
   NormalizedBoilerHour toReading() => NormalizedBoilerHour(
     hourEnd: hourEnd,
-    bunkerGallons: _completeValue(_Metric.bunker),
-    waterGallons: _completeValue(_Metric.water),
-    steamKg: _completeValue(_Metric.steam),
+    bunkerGallons: _hourlyEstimate(_Metric.bunker),
+    waterGallons: _hourlyEstimate(_Metric.water),
+    steamKg: _hourlyEstimate(_Metric.steam),
   );
 }

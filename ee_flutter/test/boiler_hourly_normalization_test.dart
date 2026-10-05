@@ -101,7 +101,7 @@ void main() {
     },
   );
 
-  test('does not expose an incomplete latest hour or hide a meter reset', () {
+  test('estimates incomplete meter coverage and keeps meter resets blank', () {
     final result = BoilerHourlyNormalizer.normalize([
       _reading(
         id: '09:00',
@@ -125,7 +125,7 @@ void main() {
 
     expect(result, hasLength(2));
     expect(result.first.hourEnd, DateTime.utc(2026, 10, 5, 16));
-    expect(result.first.bunkerGallons, isNull);
+    expect(result.first.bunkerGallons, 6);
     expect(result.first.waterGallons, 13);
     expect(result.last.hourEnd, DateTime.utc(2026, 10, 5, 15));
     expect(result.last.waterGallons, 15);
@@ -162,6 +162,100 @@ void main() {
       expect(hour.waterGallons, 20);
       expect(hour.steamKg, 20);
     }
+  });
+
+  test(
+    'normalizes from the visible raw meter values when canonical fields differ',
+    () {
+      final result = BoilerHourlyNormalizer.normalize([
+        _reading(
+          id: '09:00',
+          at: DateTime.utc(2026, 10, 5, 14),
+          bunker: 100,
+          water: 10,
+          steam: 20,
+          originalInputs: {
+            'bunker': {'value': 100, 'unit': 'gal', 'gallons': 100000},
+            'water': {'value': 10, 'unit': 'counter_x10_L', 'gallons': 26400},
+            'steam': {'value': 20, 'unit': 'kg', 'kilograms': 20000},
+          },
+        ),
+        _reading(
+          id: '10:00',
+          at: DateTime.utc(2026, 10, 5, 15),
+          bunker: 110,
+          water: 11,
+          steam: 30,
+          originalInputs: {
+            'bunker': {'value': 110, 'unit': 'gal', 'gallons': 110000},
+            'water': {'value': 11, 'unit': 'counter_x10_L', 'gallons': 29040},
+            'steam': {'value': 30, 'unit': 'kg', 'kilograms': 30000},
+          },
+        ),
+      ]);
+
+      expect(result, hasLength(1));
+      expect(result.single.bunkerGallons, 10);
+      expect(result.single.waterGallons, closeTo(2.64, 0.00001));
+      expect(result.single.steamKg, 10);
+    },
+  );
+
+  test('keeps visible an hour even when it lacks complete meter coverage', () {
+    final result = BoilerHourlyNormalizer.normalize([
+      _reading(
+        id: '08:10',
+        at: DateTime.utc(2026, 10, 5, 13, 10),
+        bunker: 100,
+        water: 200,
+      ),
+      _reading(
+        id: '09:40',
+        at: DateTime.utc(2026, 10, 5, 16, 40),
+        bunker: 110,
+        water: 220,
+      ),
+    ]);
+
+    expect(result, hasLength(3));
+    expect(result.map((hour) => hour.hourEnd), [
+      DateTime.utc(2026, 10, 5, 16),
+      DateTime.utc(2026, 10, 5, 15),
+      DateTime.utc(2026, 10, 5, 14),
+    ]);
+    final hourlyEstimate = 10 * 60 / 210;
+    expect(
+      result.map((hour) => hour.bunkerGallons),
+      everyElement(closeTo(hourlyEstimate, 0.00001)),
+    );
+    expect(
+      result.map((hour) => hour.waterGallons),
+      everyElement(closeTo(20 * 60 / 210, 0.00001)),
+    );
+  });
+
+  test('keeps closed-hour rows visible when all meters reset', () {
+    final result = BoilerHourlyNormalizer.normalize([
+      _reading(
+        id: '09:00',
+        at: DateTime.utc(2026, 10, 5, 14),
+        bunker: 200,
+        water: 300,
+        steam: 400,
+      ),
+      _reading(
+        id: '11:00',
+        at: DateTime.utc(2026, 10, 5, 16),
+        bunker: 100,
+        water: 150,
+        steam: 200,
+      ),
+    ]);
+
+    expect(result, hasLength(2));
+    expect(result.every((hour) => hour.bunkerGallons == null), isTrue);
+    expect(result.every((hour) => hour.waterGallons == null), isTrue);
+    expect(result.every((hour) => hour.steamKg == null), isTrue);
   });
 
   test('fills intermediate hours across the sparse October 5 sample', () {
@@ -203,35 +297,39 @@ void main() {
       ),
     ]);
 
-    expect(result, hasLength(5));
+    expect(result, hasLength(6));
     expect(result.map((hour) => hour.hourEnd), [
       DateTime.utc(2026, 10, 5, 19),
       DateTime.utc(2026, 10, 5, 18),
       DateTime.utc(2026, 10, 5, 17),
       DateTime.utc(2026, 10, 5, 16),
       DateTime.utc(2026, 10, 5, 15),
+      DateTime.utc(2026, 10, 5, 14),
     ]);
-    expect(result.map((hour) => hour.bunkerGallons), [
+    expect(result.take(5).map((hour) => hour.bunkerGallons), [
       closeTo(0.265645, 0.00001),
       closeTo(0.265997, 0.0001),
       closeTo(0.287220, 0.00001),
       closeTo(0.298414, 0.00001),
       closeTo(0.252414, 0.00001),
     ]);
-    expect(result.map((hour) => hour.waterGallons), [
+    expect(result.take(5).map((hour) => hour.waterGallons), [
       closeTo(0.016935, 0.00001),
       closeTo(0.016958, 0.00001),
       closeTo(0.018328, 0.00001),
       closeTo(0.018901, 0.00001),
       closeTo(0.016034, 0.00001),
     ]);
-    expect(result.map((hour) => hour.steamKg), [
+    expect(result.take(5).map((hour) => hour.steamKg), [
       closeTo(0.013548, 0.00001),
       closeTo(0.013560, 0.00001),
       closeTo(0.014229, 0.00001),
       closeTo(0.013947, 0.00001),
       closeTo(0.012414, 0.00001),
     ]);
+    expect(result.last.bunkerGallons, closeTo(0.252414, 0.00001));
+    expect(result.last.waterGallons, closeTo(0.016034, 0.00001));
+    expect(result.last.steamKg, closeTo(0.012414, 0.00001));
   });
 
   test('normalizes canonical units stored with original meter inputs', () {
