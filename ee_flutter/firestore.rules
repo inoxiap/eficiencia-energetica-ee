@@ -26,6 +26,13 @@ service cloud.firestore {
       );
     }
 
+    function isMaintenance() {
+      return signedIn()
+        && userProfileExists()
+        && userProfile().role == 'maintenance'
+        && userProfile().active == true;
+    }
+
     function providerCredentialIsValid() {
       return !isProvider() || (
         userProfileExists()
@@ -50,6 +57,33 @@ service cloud.firestore {
     function hasTrapAccess() {
       return internalUser()
         || (isProvider() && providerCredentialIsValid());
+    }
+
+    function maintenanceUpdatesOwnLeak() {
+      return isMaintenance()
+        && resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'workOrderCreated',
+          'workOrderCreatedAt',
+          'workOrderCreatedByUid',
+          'workOrderCreatedByNameSnapshot',
+          'workCompleted',
+          'workCompletedAt',
+          'workCompletedByUid',
+          'workCompletedByNameSnapshot',
+          'status',
+          'updatedAt',
+          'updatedByUid'
+        ])
+        && request.resource.data.workOrderCreated is bool
+        && request.resource.data.workCompleted is bool
+        && (!request.resource.data.workCompleted
+          || request.resource.data.workOrderCreated)
+        && request.resource.data.status
+          in ['open', 'work_order_created', 'completed']
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
     }
 
     function currentCompanyId() {
@@ -363,8 +397,26 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow create, update, delete: if false;
+    allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role == 'maintenance'
+        && request.resource.data.active == true
+        && request.resource.data.status == 'active'
+        && request.resource.data.source == 'self_registration'
+        && request.resource.data.id == uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 3
+        && request.resource.data.nationalId is string
+        && request.resource.data.nationalId.matches('^[0-9]{10}$')
+        && request.resource.data.maintenanceZoneNumbers is list
+        && request.resource.data.maintenanceZoneNumbers.size() > 0
+        && request.resource.data.maintenanceZoneNumbers.size() <= 20
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdByUid == uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == uid;
+      allow update, delete: if false;
     }
 
     match /user_private_credentials/{document} {
@@ -397,7 +449,16 @@ service cloud.firestore {
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerNameSnapshot
           == request.resource.data.createdByNameSnapshot;
-      allow read: if isAdmin() || canReadSteamTrap();
+      // Transactions reserve a TAG by first checking whether their generated
+      // document ID already exists. Allow that empty-document check without
+      // granting providers access to records owned by another company.
+      allow get: if hasTrapAccess()
+        && (
+          !exists(/databases/$(database)/documents/steam_trap_records/$(document))
+          || isAdmin()
+          || canReadSteamTrap()
+        );
+      allow list: if isAdmin() || canReadSteamTrap();
       allow update: if validSteamTrapCore()
         && validCompletedSteamTrap()
         && preservesSteamTrapIdentity()
@@ -466,7 +527,7 @@ service cloud.firestore {
     }
 
     match /leak_reports/{document} {
-      allow create: if internalUser()
+      allow create: if (internalUser() || isMaintenance())
         && createsOwnRecord()
         && request.resource.data.sectionId is string
         && request.resource.data.equipmentName is string
@@ -490,8 +551,10 @@ service cloud.firestore {
         && request.resource.data.photoProvider == 'cloudinary'
         && request.resource.data.workOrderCreated == false
         && request.resource.data.workCompleted == false;
-      allow read: if internalUser();
-      allow update: if updatesMaintenanceWorkflow();
+      allow read: if internalUser()
+        || (isMaintenance() && resource.data.createdByUid == request.auth.uid);
+      allow update: if updatesMaintenanceWorkflow()
+        || maintenanceUpdatesOwnLeak();
       allow delete: if false;
     }
 

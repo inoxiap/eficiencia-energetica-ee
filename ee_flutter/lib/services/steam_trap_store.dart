@@ -251,11 +251,10 @@ class FirebaseSteamTrapStore implements SteamTrapStore {
 
     final queries = <Query<Map<String, dynamic>>>[
       collection.where('ownerUid', isEqualTo: user.uid),
-      collection.where('isDemo', isEqualTo: true).where(
-        'sharedWithUids',
-        arrayContains: user.uid,
-      ),
     ];
+    // Demonstration records are shared only with internal staff. Avoid issuing
+    // an unnecessary third provider query: one denied query in Future.wait
+    // used to discard valid owner/company results as well.
     if (user.companyId.isNotEmpty) {
       queries.add(collection.where('companyId', isEqualTo: user.companyId));
     }

@@ -1,9 +1,14 @@
 part of '../main.dart';
 
 class MaintenanceHistoryScreen extends StatefulWidget {
-  const MaintenanceHistoryScreen({required this.store, super.key});
+  const MaintenanceHistoryScreen({
+    required this.store,
+    this.maintenanceMode = false,
+    super.key,
+  });
 
   final MaintenanceReportStore store;
+  final bool maintenanceMode;
 
   @override
   State<MaintenanceHistoryScreen> createState() =>
@@ -41,29 +46,43 @@ class _MaintenanceHistoryScreenState extends State<MaintenanceHistoryScreen> {
             returnToHome(context);
             return;
           }
+          if (widget.maintenanceMode) return;
           setState(() {
             _selectedType = index == 0
                 ? MaintenanceReportType.leak
                 : MaintenanceReportType.barePipe;
           });
         },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.water_drop_outlined),
-            selectedIcon: Icon(Icons.water_drop),
-            label: 'Fugas',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Casa',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.thermostat_outlined),
-            selectedIcon: Icon(Icons.thermostat),
-            label: 'Tuberias',
-          ),
-        ],
+        destinations: widget.maintenanceMode
+            ? const [
+                NavigationDestination(
+                  icon: Icon(Icons.water_drop_outlined),
+                  selectedIcon: Icon(Icons.water_drop),
+                  label: 'Fugas',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home),
+                  label: 'Casa',
+                ),
+              ]
+            : const [
+                NavigationDestination(
+                  icon: Icon(Icons.water_drop_outlined),
+                  selectedIcon: Icon(Icons.water_drop),
+                  label: 'Fugas',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home),
+                  label: 'Casa',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.thermostat_outlined),
+                  selectedIcon: Icon(Icons.thermostat),
+                  label: 'Tuberias',
+                ),
+              ],
       ),
       children: [
         const EeHeader(
@@ -101,8 +120,14 @@ class _MaintenanceHistoryScreenState extends State<MaintenanceHistoryScreen> {
         const SizedBox(height: 12),
         MetricGrid(
           metrics: [
-            Metric('Sin OT', openCount.toString()),
-            Metric('Con OT', otCount.toString()),
+            Metric(
+              widget.maintenanceMode ? 'Sin ST' : 'Sin OT',
+              openCount.toString(),
+            ),
+            Metric(
+              widget.maintenanceMode ? 'Con ST' : 'Con OT',
+              otCount.toString(),
+            ),
             Metric('Ejecutados', completedCount.toString()),
           ],
         ),
@@ -123,6 +148,7 @@ class _MaintenanceHistoryScreenState extends State<MaintenanceHistoryScreen> {
           for (final report in filtered) ...[
             _MaintenanceReportCard(
               report: report,
+              maintenanceMode: widget.maintenanceMode,
               isUpdating: _updatingId == report.id,
               onWorkOrderChanged: (value) => _updateWorkflow(
                 report,
@@ -259,12 +285,14 @@ class _MaintenanceHistoryScreenState extends State<MaintenanceHistoryScreen> {
 class _MaintenanceReportCard extends StatelessWidget {
   const _MaintenanceReportCard({
     required this.report,
+    required this.maintenanceMode,
     required this.isUpdating,
     required this.onWorkOrderChanged,
     required this.onCompletedChanged,
   });
 
   final MaintenanceReportSummary report;
+  final bool maintenanceMode;
   final bool isUpdating;
   final ValueChanged<bool> onWorkOrderChanged;
   final ValueChanged<bool>? onCompletedChanged;
@@ -323,7 +351,7 @@ class _MaintenanceReportCard extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               dense: true,
               controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('OT generada'),
+              title: Text(maintenanceMode ? 'ST generada' : 'OT generada'),
             ),
             CheckboxListTile(
               value: report.workCompleted,
@@ -336,7 +364,11 @@ class _MaintenanceReportCard extends StatelessWidget {
               title: const Text('Trabajo ejecutado'),
               subtitle: report.workOrderCreated
                   ? null
-                  : const Text('Primero confirma que la OT fue generada.'),
+                  : Text(
+                      maintenanceMode
+                          ? 'Primero confirma que la ST fue generada.'
+                          : 'Primero confirma que la OT fue generada.',
+                    ),
             ),
             if (isUpdating) const LinearProgressIndicator(minHeight: 2),
           ],

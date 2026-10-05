@@ -11,6 +11,7 @@ class AuthenticatedOperator {
     this.companyName = '',
     this.active = true,
     this.credentialExpiresAt,
+    this.maintenanceZoneNumbers = const [],
   });
 
   final String uid;
@@ -20,8 +21,12 @@ class AuthenticatedOperator {
   final String companyName;
   final bool active;
   final DateTime? credentialExpiresAt;
+  final List<int> maintenanceZoneNumbers;
 
-  bool get providerAccessExpired => role == 'provider' &&
+  bool get isMaintenance => role == 'maintenance';
+
+  bool get providerAccessExpired =>
+      role == 'provider' &&
       (!active ||
           credentialExpiresAt == null ||
           !DateTime.now().isBefore(credentialExpiresAt!));
@@ -66,6 +71,7 @@ class FirebaseOperatorSession implements OperatorSession {
     var companyId = '';
     var companyName = '';
     var active = true;
+    var maintenanceZoneNumbers = <int>[];
     DateTime? credentialExpiresAt;
     try {
       final profile = await (_firestore ?? FirebaseFirestore.instance)
@@ -90,15 +96,32 @@ class FirebaseOperatorSession implements OperatorSession {
       }
       if (storedRole == 'admin' ||
           storedRole == 'operator' ||
-          storedRole == 'provider') {
+          storedRole == 'provider' ||
+          storedRole == 'maintenance') {
         role = storedRole;
+      }
+      final storedZones = data?['maintenanceZoneNumbers'];
+      if (storedZones is List) {
+        final parsed =
+            storedZones
+                .whereType<num>()
+                .map((zone) => zone.toInt())
+                .toSet()
+                .toList()
+              ..sort();
+        maintenanceZoneNumbers = parsed;
       }
     } catch (_) {
       try {
         final claims = await user.getIdTokenResult().timeout(timeout);
         final claimedRole = claims.claims?['role'];
         if (claimedRole is String &&
-            ['admin', 'operator', 'provider'].contains(claimedRole)) {
+            [
+              'admin',
+              'operator',
+              'provider',
+              'maintenance',
+            ].contains(claimedRole)) {
           role = claimedRole;
           companyId = claims.claims?['companyId'] as String? ?? '';
         }
@@ -113,6 +136,7 @@ class FirebaseOperatorSession implements OperatorSession {
       companyName: companyName,
       active: active,
       credentialExpiresAt: credentialExpiresAt,
+      maintenanceZoneNumbers: maintenanceZoneNumbers,
     );
   }
 }

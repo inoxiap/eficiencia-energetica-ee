@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -36,11 +37,24 @@ class CloudinaryService {
       ),
     );
 
-    final response = await request.send().timeout(uploadTimeout);
-    final body = await response.stream.bytesToString();
+    try {
+      final response = await request.send().timeout(uploadTimeout);
+      // La peticion puede recibir cabeceras y quedarse esperando el cuerpo.
+      // Tambien limitamos esta segunda etapa para que el formulario nunca
+      // permanezca bloqueado indefinidamente.
+      final body = await response.stream.bytesToString().timeout(uploadTimeout);
+      return _parseUploadResponse(response.statusCode, body);
+    } on TimeoutException {
+      throw Exception(
+        'Cloudinary no respondio a tiempo. Revisa la conexion e intenta otra vez.',
+      );
+    }
+  }
+
+  CloudinaryUpload _parseUploadResponse(int statusCode, String body) {
     final payload = _decodeJson(body);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (statusCode < 200 || statusCode >= 300) {
       final error = payload['error'];
       final message = error is Map<String, dynamic>
           ? error['message'] as String?

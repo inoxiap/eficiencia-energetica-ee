@@ -520,6 +520,46 @@ describe("Firestore rules", () => {
     );
   });
 
+  it("lets providers reserve a new trap without reading another company's records", async () => {
+    await seedProvider("provider-reservation", "tuval");
+    const provider = environment
+      .authenticatedContext("provider-reservation", {role: "provider"})
+      .firestore();
+    const record = doc(provider, "steam_trap_records/new-margarina-trap");
+    const counter = doc(provider, "steam_trap_counters/15");
+
+    await assertSucceeds(runTransaction(provider, async (transaction) => {
+      const existing = await transaction.get(record);
+      if (existing.exists()) throw new Error("Unexpected existing reservation.");
+      const counterSnapshot = await transaction.get(counter);
+      const next = (counterSnapshot.data()?.lastNumber as number | undefined ?? 0) + 1;
+      transaction.set(counter, {
+        sectionCode: "15",
+        lastNumber: next,
+        updatedAt: serverTimestamp(),
+        updatedByUid: "provider-reservation",
+      });
+      transaction.set(record, {
+        ...steamTrapRecord("provider-reservation", "tuval"),
+        id: "new-margarina-trap",
+        tag: `TV-15-${String(next).padStart(3, "0")}`,
+        sectionCode: "15",
+        sectionId: "margarina",
+        sectionNameSnapshot: "Margarina",
+        createdByNameSnapshot: "Proveedor Uno",
+      });
+    }));
+
+    await assertSucceeds(getDoc(record));
+    const otherCompany = environment
+      .authenticatedContext("other-company-provider", {role: "provider"})
+      .firestore();
+    await assertFails(getDoc(doc(
+      otherCompany,
+      "steam_trap_records/new-margarina-trap",
+    )));
+  });
+
   it("allows an internal user without token claims to reserve and complete a steam trap", async () => {
     await seedInternalUser("internal-1");
     const internal = environment.authenticatedContext("internal-1").firestore();

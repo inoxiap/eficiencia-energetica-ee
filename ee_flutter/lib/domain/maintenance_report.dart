@@ -10,6 +10,7 @@ class MaintenanceReportSummary {
     required this.detail,
     required this.photoUrl,
     required this.createdByName,
+    required this.createdByUid,
     required this.workOrderCreated,
     required this.workCompleted,
     required this.status,
@@ -23,6 +24,7 @@ class MaintenanceReportSummary {
   final String detail;
   final String photoUrl;
   final String createdByName;
+  final String createdByUid;
   final bool workOrderCreated;
   final bool workCompleted;
   final String status;
@@ -41,6 +43,7 @@ class MaintenanceReportSummary {
       detail: detail,
       photoUrl: photoUrl,
       createdByName: createdByName,
+      createdByUid: createdByUid,
       workOrderCreated: workOrderCreated ?? this.workOrderCreated,
       workCompleted: workCompleted ?? this.workCompleted,
       status: status ?? this.status,

@@ -141,7 +141,20 @@ class FirebaseMaintenanceReportStore implements MaintenanceReportStore {
   @override
   Future<List<MaintenanceReportSummary>> loadReports() async {
     await _firebaseReady.timeout(timeout);
-    await _requireOperator();
+    final operator = await _requireOperator();
+    if (operator.isMaintenance) {
+      final snapshot = await _firebaseFirestore
+          .collection('leak_reports')
+          .where('createdByUid', isEqualTo: operator.uid)
+          .limit(500)
+          .get()
+          .timeout(timeout);
+      final reports = snapshot.docs
+          .map((document) => _summaryFromLeak(document.id, document.data()))
+          .toList();
+      reports.sort((left, right) => right.createdAt.compareTo(left.createdAt));
+      return reports;
+    }
     final results = await Future.wait([
       _firebaseFirestore
           .collection('leak_reports')
@@ -175,6 +188,13 @@ class FirebaseMaintenanceReportStore implements MaintenanceReportStore {
   }) async {
     await _firebaseReady.timeout(timeout);
     final operator = await _requireOperator();
+    if (operator.isMaintenance &&
+        (report.type != MaintenanceReportType.leak ||
+            report.createdByUid != operator.uid)) {
+      throw const MaintenanceReportException(
+        'Solo puedes actualizar tus propios reportes de fugas.',
+      );
+    }
     final normalizedCompleted = workOrderCreated && workCompleted;
     final status = normalizedCompleted
         ? 'completed'
@@ -249,6 +269,7 @@ class FirebaseMaintenanceReportStore implements MaintenanceReportStore {
       detail: tag.isEmpty ? 'Fuga de $typeName' : 'Fuga de $typeName - N. $tag',
       photoUrl: data['photoUrl'] as String? ?? '',
       createdByName: data['createdByNameSnapshot'] as String? ?? 'Historico',
+      createdByUid: data['createdByUid'] as String? ?? '',
       workOrderCreated: data['workOrderCreated'] == true,
       workCompleted: data['workCompleted'] == true,
       status: data['status'] as String? ?? 'open',
@@ -274,6 +295,7 @@ class FirebaseMaintenanceReportStore implements MaintenanceReportStore {
       detail: details.isEmpty ? 'Tuberia desnuda' : details.join(' - '),
       photoUrl: data['photoUrl'] as String? ?? '',
       createdByName: data['createdByNameSnapshot'] as String? ?? 'Historico',
+      createdByUid: data['createdByUid'] as String? ?? '',
       workOrderCreated: data['workOrderCreated'] == true,
       workCompleted: data['workCompleted'] == true,
       status: data['status'] as String? ?? 'open',

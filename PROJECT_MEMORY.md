@@ -1,6 +1,6 @@
 # Memoria del proyecto: Eficiencia Energetica EE
 
-Ultima actualizacion: 2026-09-24
+Ultima actualizacion: 2026-10-02
 
 Este documento es la memoria operativa persistente del proyecto. Debe leerse
 completo al iniciar o retomar cualquier tarea y actualizarse al terminar cambios
@@ -16,7 +16,8 @@ o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
   `https://github.com/inoxiap/eficiencia-energetica-ee.git`
 - Rama principal: `main`.
 - Aplicacion activa: `ee_flutter/`.
-- Version Flutter actual: `1.7.4+15`.
+- Version Flutter web actual: `1.7.5+16`; Android release instalado/publicado
+  continua en `1.7.4+15`.
 - La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
   historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
 
@@ -1399,6 +1400,218 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   código ni Hosting.
 - Pruebas: verificacion Admin SDK en produccion de Auth y perfiles; no se
   probo un inicio de sesion de usuario final.
+
+### 2026-09-29 - Reserva de TAG bloqueada para proveedores
+
+- Incidente: Henry, proveedor Tuval, no podia confirmar un levantamiento en
+  Margarina; Flutter Web mostraba una excepcion generica al guardar.
+- Diagnostico de solo lectura en Firestore de produccion: perfil proveedor
+  activo y vigente; no existia el contador de la seccion 15 ni documento para
+  ese levantamiento. La transaccion primero lee el ID aleatorio aun inexistente,
+  pero la regla de lectura anterior solo autorizaba documentos ya visibles.
+  Por eso se rechazaba la reserva antes de crear el borrador, asignar TAG o
+  comenzar a subir fotos a Cloudinary. No se modificaron registros ni fotos.
+- Correccion: reglas separan `get` de `list`; un usuario con acceso vigente al
+  modulo puede comprobar unicamente que un ID todavia no existe. Para IDs
+  existentes siguen vigentes las restricciones por rol, propietario y empresa.
+  Se agrego prueba de reglas que ejercita la reserva transaccional y verifica
+  que otro proveedor no pueda leer el resultado.
+- Archivos: `ee_flutter/firestore.rules` y
+  `ee_flutter/functions/test/firestore.rules.test.ts`.
+- Verificacion: `npx tsc --noEmit` en Functions aprobado; `git diff --check`
+  aprobado; Firebase compilo y publico `firestore.rules` en produccion. No se
+  ejecuto Emulator Suite por la preferencia vigente de Jeff.
+- Despliegue: solo reglas Firestore; no se cambio Hosting, APK, indices ni
+  datos. Pendiente: Henry debe reintentar la confirmacion; el intento fallido
+  no dejo un borrador ni consumio un TAG.
+
+### 2026-09-29 - Consulta compartida de trampas para La Llave
+
+- Incidente: David Paz ve `cloud_firestore/permission-denied` al abrir Consulta
+  despues de un levantamiento.
+- Verificacion de solo lectura en produccion: el perfil de David esta activo,
+  vigente y asociado a `la_llave`. La empresa tiene un registro completo,
+  `TV-04-001`, creado por Manuel Portilla, con ambas fotos. No se modifico ni
+  elimino ningun registro.
+- Hallazgo: la carga de proveedores ejecutaba tres consultas simultaneas y
+  `Future.wait` descartaba todos los resultados si una era denegada. La tercera
+  consulta buscaba DEMO compartidos; esos ejemplos estan compartidos solo con
+  Jeff y no se necesitan en la consulta de proveedores.
+- Correccion: se retiro la consulta DEMO para proveedores. Se mantienen las
+  consultas de registros propios (compatibilidad) y de toda su empresa; el
+  acceso a datos ajenos continua controlado por Firestore Rules. Version fuente
+  `1.7.5+16`.
+- Archivos: `ee_flutter/lib/services/steam_trap_store.dart` y
+  `ee_flutter/pubspec.yaml`.
+- Pruebas: `flutter analyze --no-pub --no-fatal-infos` aprobado; pruebas
+  focalizadas de entrada y pantalla de trampas: 3 aprobadas; build web release
+  correcto; `git diff --check` correcto.
+- Despliegue: Firebase Hosting publicado en
+  `https://eficiencia-energetica-ee.web.app`; `main.dart.js` comprobado con
+  HTTP 200 el 2026-09-29. No se genero ni publico APK en esta tarea.
+- Pendiente: David debe recargar la pagina y confirmar que ve los registros de
+  La Llave. La causa exacta de cual de las tres solicitudes fue denegada no se
+  pudo observar en su dispositivo; se elimino la consulta innecesaria que no
+  correspondia al acceso de proveedores.
+
+### 2026-09-29 - Prueba Android de consulta y alta de trampas
+
+- Solicitud: navegar desde el emulador Android y comprobar consulta y captura
+  de trampas sin errores.
+- Emulador: `Pixel_8_API_30` visible, renderizado por software; el AVD API 35 no
+  tenia espacio para instalar. Se compilo e instalo un APK debug local de la
+  fuente `1.7.5+16`, que usa Firebase de produccion.
+- Consulta: con la sesion persistida de Jefferson, la pantalla cargo 7
+  levantamientos de Firestore sin `permission-denied`; se observaron tarjetas
+  completas y borradores. No se abrieron enlaces de exportacion ni se cambio
+  ningun registro.
+- Captura: se navego a `Ingresar trampa`; el formulario y controles se
+  mostraron. Al revisar un formulario incompleto, la app presento la validacion
+  legible `Selecciona la seccion.` sin excepcion. No se cargaron fotos, no se
+  reservo TAG y no se guardo borrador ni registro en produccion.
+- Pruebas automatizadas: `flutter test --no-pub
+  test/steam_trap_entry_test.dart test/steam_trap_module_screen_test.dart`:
+  3 pruebas aprobadas; `git diff --check` aprobado. Logcat no registro
+  `permission-denied` ni excepcion Flutter durante el recorrido. Mostro avisos
+  de shader Impeller y servicios Google del AVD, sin impedir la navegacion.
+- Limite: esta sesion Android corresponde a Jefferson; por ello valida la
+  consulta con permisos internos, no la visibilidad exacta de un proveedor.
+  No se completo una escritura real para no introducir datos de prueba en
+  produccion. Para certificar el guardado y la consulta de proveedor, coordinar
+  una prueba controlada con un proveedor y su autorizacion; luego confirmar y
+  limpiar solo ese registro de prueba si las reglas lo permiten.
+
+### 2026-10-02 - Registro y acceso de equipo de mantenimiento en pruebas
+
+- Solicitud: habilitar registro autonomo para equipo de mantenimiento, asignar
+  varias zonas, replicar el modelo de zonas y auditorias cruzadas de Auditoria
+  5S, mostrar semanas de auditoria, limitar seguimiento a reportes propios y
+  usar `ST` en lugar de `OT` para este rol.
+- Resultado: se incorporaron las 83 zonas, 14 secciones y responsables de la
+  matriz `ZONIFICACION PROCESOS.xlsx`; se admite una, dos o tres zonas por
+  usuario y se bloquean duplicados en el formulario. El rol publico solo puede
+  ser `maintenance` y accede a fugas, seguimiento propio, semana y directorio.
+  La asignacion semanal excluye todas sus zonas a cargo.
+- Archivos principales: catalogo de zonas, registro de mantenimiento,
+  `operator_auth_service.dart`, `operator_session.dart`,
+  `maintenance_report_store.dart`, `maintenance_history_screen.dart`,
+  `firestore.rules` y pantallas de semana/directorio.
+- Pruebas/builds: `flutter analyze --no-pub` aprobado; 56 pruebas existentes
+  aprobadas; pruebas del catalogo de zonas aprobadas; `flutter build web
+  --release` aprobado; `git diff --check` aprobado.
+- Despliegue: ninguno. Hosting, reglas productivas y APK no se publicaron;
+  el trabajo queda local para pruebas y aprobacion de Jeff.
+- Decisiones: los campos internos existentes `workOrderCreated` se conservan
+  para compatibilidad historica, pero la interfaz de mantenimiento muestra
+  `ST generada`. El registro no guarda el PIN en Firestore.
+- Pendientes o riesgos: probar el registro y las reglas con Firebase real o
+  una bateria autorizada antes de publicar; revisar si la asignacion semanal
+  debe generar una sola zona por persona o una asignacion por cada zona a su
+  cargo.
+
+### 2026-10-02 - APK debug local para prueba de registro
+
+- Solicitud: abrir el emulador para que Jeff pruebe el registro del usuario de
+  mantenimiento.
+- Resultado: se inicio `Pixel_8_API_30`, se compilo `flutter build apk --debug`
+  y se instalo el APK local en `emulator-5554`. La actividad Flutter quedo
+  abierta y no se publicaron cambios.
+- Pruebas/builds: compilacion debug aprobada; el emulador reporto arranque
+  completo. El ping ICMP a Firestore no recibio respuesta, por lo que la
+  conectividad de Firebase debe validarse desde la app durante la prueba.
+- Despliegue: ninguno.
+
+### 2026-10-02 - Prueba aislada de registro con Firebase Emulator Suite
+
+- Incidente: el APK conectado a produccion mostro `permission-denied` al crear
+  el perfil porque las reglas nuevas de auto-registro aun no estan publicadas.
+- Resultado: se levantaron Auth y Firestore Emulator, se compilo e instalo un
+  APK debug con `USE_FIREBASE_EMULATORS=true`, y se limpio la instalacion del
+  emulador para repetir el registro sin tocar datos productivos.
+- Despliegue: ninguno. La prueba actual usa `127.0.0.1:9099/8081` desde el
+  emulador Android mediante `10.0.2.2`.
+
+### 2026-10-02 - Validacion de interfaz en emulador y regresion local
+
+- Resultado: el selector de zonas mostro el catalogo cargado y se corrigio el
+  desbordamiento visual de los nombres largos usando truncamiento controlado.
+  El flujo de registro fue visible, pero la imagen Android presento cierres
+  intermitentes al alternar el teclado y regreso al launcher antes de completar
+  una cuenta desde UI.
+- Pruebas/builds: `flutter analyze --no-pub` aprobado; `flutter test --no-pub`
+  aprobado con 58 pruebas; `git diff --check` aprobado; APK debug local
+  recompilado e instalado con `USE_FIREBASE_EMULATORS=true`.
+- Despliegue: ninguno. No se tocaron Auth/Firestore productivos ni se envio
+  actualizacion.
+- Pendientes o riesgos: repetir en un emulador Android estable la creacion de
+  un reporte con foto y su consulta en seguimiento; validar despues contra
+  Firebase productivo cuando Jeff apruebe publicar reglas y funciones.
+
+### 2026-10-02 - Consulta de reporte de fuga en emulador
+
+- Resultado: se inicio sesion con un perfil de mantenimiento de prueba, se
+  abrio el modulo de fugas, se capturo evidencia con la camara del emulador y
+  se verifico en Seguimiento de mis reportes un registro propio `F-000001`,
+  tipo Vapor, con estado `Sin ST`.
+- Pruebas/builds: APK debug local conectado a Auth/Firestore Emulator; la
+  consulta visual mostro 1 reporte propio, 0 con ST y 0 ejecutados.
+- Nota: el boton Revisar reporte activo el dialogo intermitente de
+  `System UI isn't responding` de la imagen Android; para completar la
+  validacion aislada se creo el documento equivalente directamente en
+  Firestore Emulator con server timestamps. No se escribio en produccion.
+- Despliegue: ninguno. La regla local temporal usada durante la preparacion
+  del perfil fue restaurada inmediatamente despues de la prueba.
+
+### 2026-10-02 - Evitar bloqueo al confirmar una fuga
+
+- Incidente: al pulsar `Confirmar y subir`, la pantalla quedaba oscurecida y
+  parecia congelada durante la carga de evidencia.
+- Diagnostico: `CloudinaryService` tenia timeout para enviar el multipart,
+  pero no para leer `response.stream.bytesToString()`. Una respuesta de red
+  incompleta podia dejar `_isSubmitting` activo indefinidamente.
+- Correccion: se aplico el mismo limite de tiempo a la lectura de la respuesta
+  y se muestra un error legible que permite reintentar cuando Cloudinary no
+  responde a tiempo.
+- Archivos: `ee_flutter/lib/services/cloudinary_service.dart`.
+- Pruebas: `flutter analyze --no-pub --no-fatal-infos` aprobado; `flutter test
+  --no-pub` aprobado con 59 pruebas; APK debug compilada e instalada
+  localmente en `emulator-5554`.
+- Despliegue: ninguno. No se publico Hosting, APK ni reglas.
+- Limite: el emulador presento una respuesta intermitente al arrancar la
+  actividad, por lo que no se certifico un recorrido visual completo de carga
+  en esta pasada.
+
+### 2026-10-02 - Mensaje de registro y desbordamiento del selector de zonas
+
+- Incidente: el autorregistro mostraba `permission-denied` al guardar el perfil
+  y Flutter mostraba el indicador amarillo/negro de desbordamiento junto al
+  selector de zonas.
+- Diagnostico: las reglas que permiten el autorregistro siguen sin publicarse
+  en Firebase productivo; el ancho fijo del selector excedia el espacio util
+  en el emulador Android.
+- Correccion: se quitaron los anchos fijos del menu y del valor seleccionado,
+  conservando truncamiento adaptativo. El mensaje de `permission-denied` ahora
+  explica que las reglas de autorregistro aun requieren publicacion.
+- Archivos: `ee_flutter/lib/screens/maintenance_registration_screen.dart` y
+  `ee_flutter/lib/services/operator_auth_service.dart`.
+- Pruebas: `flutter analyze --no-pub --no-fatal-infos` aprobado; pruebas
+  focalizadas de catalogo y pantalla inicial aprobadas; APK debug compilada e
+  instalada en `emulator-5554`; `git diff --check` aprobado.
+- Despliegue: ninguno. No se publicaron reglas, Hosting ni APK release.
+- Pendiente: publicar las reglas de Firestore solo despues de la aprobacion de
+  Jeff y repetir el autorregistro contra Firebase productivo.
+
+### 2026-10-03 - Ajuste final del selector de zonas en Android
+
+- Hallazgo: aun podia aparecer `RIGHT OVERFLOWED BY ... PIXELS` en el selector
+  cuando la APK anterior estaba instalada; quitar los anchos fijos no bastaba
+  porque el `DropdownButtonFormField` no estaba expandido.
+- Correccion: se activo `isExpanded: true` para que el texto use el ancho
+  disponible y conserve el truncamiento sin mostrar el indicador amarillo/negro.
+- Pruebas: `flutter analyze --no-pub --no-fatal-infos` aprobado; prueba del
+  catalogo de zonas aprobada; APK debug compilada e instalada en
+  `emulator-5554`; `git diff --check` aprobado.
+- Despliegue: ninguno. La APK instalada es solo de prueba local.
 
 ## Plantilla para futuras entradas
 

@@ -23,6 +23,7 @@ import 'domain/boiler_consumption.dart';
 import 'domain/destination_catalog.dart';
 import 'domain/leak_report.dart';
 import 'domain/maintenance_report.dart';
+import 'domain/maintenance_zone_catalog.dart';
 import 'domain/section_catalog.dart';
 import 'domain/steam_pressure_reading.dart';
 import 'domain/steam_trap_entry.dart';
@@ -51,6 +52,9 @@ import 'widgets/home_navigation_bar.dart';
 
 part 'screens/leak_report_screen.dart';
 part 'screens/maintenance_history_screen.dart';
+part 'screens/maintenance_registration_screen.dart';
+part 'screens/maintenance_zone_directory_screen.dart';
+part 'screens/maintenance_week_screen.dart';
 part 'screens/boiler_readings_history_screen.dart';
 part 'screens/pressure_entry_tab.dart';
 part 'screens/input_controls_playground_screen.dart';
@@ -438,9 +442,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     if (_isLoadingUser) {
       return const AppShell(
-        children: [
-          Center(child: CircularProgressIndicator()),
-        ],
+        children: [Center(child: CircularProgressIndicator())],
       );
     }
     if (_user == null) {
@@ -448,6 +450,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (_user!.role == 'provider') {
       return AppShell(children: _providerHome());
+    }
+    if (_user!.isMaintenance) {
+      return AppShell(children: _maintenanceHome());
     }
     if (!['operator', 'admin'].contains(_user!.role)) {
       return AppShell(children: _unprovisionedHome());
@@ -466,7 +471,25 @@ class _HomeScreenState extends State<HomeScreen> {
       label: 'Ingresar',
       onPressed: _openUserAccess,
     ),
+    const SizedBox(height: 10),
+    EeActionButton(
+      icon: Icons.person_add_alt_1,
+      label: 'Registrarse como equipo de mantenimiento',
+      isPrimary: false,
+      onPressed: _openMaintenanceRegistration,
+    ),
   ];
+
+  Future<void> _openMaintenanceRegistration() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MaintenanceRegistrationScreen(
+          authService: widget.operatorAuthService,
+        ),
+      ),
+    );
+    await _refreshUser();
+  }
 
   List<Widget> _unprovisionedHome() => [
     const EeHeader(
@@ -534,225 +557,288 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
   }
 
-  List<Widget> _internalHome() => [
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Expanded(
-                flex: 4,
-                child: EeHeader(
-                  title: 'Eficiencia Energetica EE',
-                  subtitle: 'Herramientas de campo para gestion energetica.',
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: _identityButton()),
-            ],
+  List<Widget> _maintenanceHome() => [
+    IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            flex: 4,
+            child: EeHeader(
+              title: 'Equipo de mantenimiento',
+              subtitle: _user!.displayName,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: _identityButton()),
+        ],
+      ),
+    ),
+    const SizedBox(height: 18),
+    EeActionButton(
+      icon: Icons.water_drop_outlined,
+      label: 'Reportar fugas',
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => LeakReportScreen(
+            store: widget.maintenanceReportStore,
+            cloudinaryService: widget.cloudinaryService,
+            operatorSession: widget.operatorSession,
           ),
         ),
-        const SizedBox(height: 18),
-        Text('Modulos', style: Theme.of(context).textTheme.titleMediumBold),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              flex: 4,
-              child: EeActionButton(
-                icon: Icons.local_fire_department_outlined,
-                label: 'Ingresar consumos',
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ConsumptionEntryScreen(
-                        consumptionStore: widget.consumptionStore,
-                        pressureReadingStore: widget.pressureReadingStore,
-                        operatorSession: widget.operatorSession,
-                      ),
-                    ),
-                  );
-                },
-              ),
+      ),
+    ),
+    const SizedBox(height: 10),
+    EeActionButton(
+      icon: Icons.assignment_turned_in_outlined,
+      label: 'Seguimiento de mis reportes',
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MaintenanceHistoryScreen(
+            store: widget.maintenanceReportStore,
+            maintenanceMode: true,
+          ),
+        ),
+      ),
+    ),
+    const SizedBox(height: 10),
+    EeActionButton(
+      icon: Icons.calendar_month_outlined,
+      label: 'Mi semana de auditoría',
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MaintenanceWeekScreen(operator: _user!),
+        ),
+      ),
+    ),
+    const SizedBox(height: 10),
+    EeActionButton(
+      icon: Icons.groups_outlined,
+      label: 'Zonas y responsables',
+      isPrimary: false,
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const MaintenanceZoneDirectoryScreen(),
+        ),
+      ),
+    ),
+  ];
+
+  List<Widget> _internalHome() => [
+    IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Expanded(
+            flex: 4,
+            child: EeHeader(
+              title: 'Eficiencia Energetica EE',
+              subtitle: 'Herramientas de campo para gestion energetica.',
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: SizedBox(
-                height: 52,
-                child: FilledButton(
-                  key: const Key('boiler-readings-history-button'),
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => BoilerReadingsHistoryScreen(
-                          consumptionStore: widget.consumptionStore,
-                        ),
-                      ),
-                    );
-                  },
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 3,
-                      vertical: 5,
-                    ),
-                    backgroundColor: brandRed,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: _identityButton()),
+        ],
+      ),
+    ),
+    const SizedBox(height: 18),
+    Text('Modulos', style: Theme.of(context).textTheme.titleMediumBold),
+    const SizedBox(height: 10),
+    Row(
+      children: [
+        Expanded(
+          flex: 4,
+          child: EeActionButton(
+            icon: Icons.local_fire_department_outlined,
+            label: 'Ingresar consumos',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ConsumptionEntryScreen(
+                    consumptionStore: widget.consumptionStore,
+                    pressureReadingStore: widget.pressureReadingStore,
+                    operatorSession: widget.operatorSession,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SizedBox(
+            height: 52,
+            child: FilledButton(
+              key: const Key('boiler-readings-history-button'),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => BoilerReadingsHistoryScreen(
+                      consumptionStore: widget.consumptionStore,
                     ),
                   ),
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.history, size: 20),
-                      SizedBox(height: 2),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          'Registros',
-                          maxLines: 1,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                );
+              },
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+                backgroundColor: brandRed,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
+              ),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.history, size: 20),
+                  SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Registros',
+                      maxLines: 1,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
-        const SizedBox(height: 10),
-        EeActionButton(
-          icon: Icons.tune,
-          label: 'Dimensionamiento de trampas',
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => TrapSizingScreen(
-                  reportStore: widget.trapSizingReportStore,
-                  operatorSession: widget.operatorSession,
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 10),
-        EeActionButton(
-          key: const Key('steam-trap-module-button'),
-          icon: Icons.plumbing_outlined,
-          label: 'Ingreso Trampas de vapor',
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => SteamTrapModuleScreen(
-                  store: widget.steamTrapStore,
-                  cloudinaryService: widget.cloudinaryService,
-                  operatorSession: widget.operatorSession,
-                  operatorAuthService: widget.operatorAuthService,
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 10),
-        EeActionButton(
-          icon: Icons.photo_camera_outlined,
-          label: 'Reporte de tuberia desnuda',
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => BarePipeReportScreen(
-                  reportStore: widget.reportStore,
-                  cloudinaryService: widget.cloudinaryService,
-                  operatorSession: widget.operatorSession,
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 10),
-        EeActionButton(
-          icon: Icons.water_drop_outlined,
-          label: 'Reportar fugas',
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => LeakReportScreen(
-                  store: widget.maintenanceReportStore,
-                  cloudinaryService: widget.cloudinaryService,
-                  operatorSession: widget.operatorSession,
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 10),
-        EeActionButton(
-          icon: Icons.electric_bolt_outlined,
-          label: 'Levantamiento de bombas',
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => PumpSurveyScreen(
-                  store: widget.pumpSurveyStore,
-                  operatorSession: widget.operatorSession,
-                  cloudinaryService: widget.cloudinaryService,
-                  motorReferenceStore: widget.motorReferenceStore,
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 10),
-        EeActionButton(
-          icon: Icons.touch_app_outlined,
-          label: 'Tablero de ingreso',
-          isPrimary: false,
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => InputControlsPlaygroundScreen(
-                  consumptionStore: widget.consumptionStore,
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 10),
-        EeActionButton(
-          icon: Icons.assignment_turned_in_outlined,
-          label: 'Seguimiento de reportes',
-          isPrimary: false,
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => MaintenanceHistoryScreen(
-                  store: widget.maintenanceReportStore,
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 10),
-        EeActionButton(
-          icon: Icons.bar_chart,
-          label: 'Panel administrador',
-          isPrimary: false,
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => AdminScreen(
-                  reportStore: widget.reportStore,
-                  consumptionStore: widget.consumptionStore,
-                  maintenanceReportStore: widget.maintenanceReportStore,
-                ),
-              ),
-            );
-          },
-        ),
-      ];
+      ],
+    ),
+    const SizedBox(height: 10),
+    EeActionButton(
+      icon: Icons.tune,
+      label: 'Dimensionamiento de trampas',
+      onPressed: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => TrapSizingScreen(
+              reportStore: widget.trapSizingReportStore,
+              operatorSession: widget.operatorSession,
+            ),
+          ),
+        );
+      },
+    ),
+    const SizedBox(height: 10),
+    EeActionButton(
+      key: const Key('steam-trap-module-button'),
+      icon: Icons.plumbing_outlined,
+      label: 'Ingreso Trampas de vapor',
+      onPressed: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => SteamTrapModuleScreen(
+              store: widget.steamTrapStore,
+              cloudinaryService: widget.cloudinaryService,
+              operatorSession: widget.operatorSession,
+              operatorAuthService: widget.operatorAuthService,
+            ),
+          ),
+        );
+      },
+    ),
+    const SizedBox(height: 10),
+    EeActionButton(
+      icon: Icons.photo_camera_outlined,
+      label: 'Reporte de tuberia desnuda',
+      onPressed: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => BarePipeReportScreen(
+              reportStore: widget.reportStore,
+              cloudinaryService: widget.cloudinaryService,
+              operatorSession: widget.operatorSession,
+            ),
+          ),
+        );
+      },
+    ),
+    const SizedBox(height: 10),
+    EeActionButton(
+      icon: Icons.water_drop_outlined,
+      label: 'Reportar fugas',
+      onPressed: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => LeakReportScreen(
+              store: widget.maintenanceReportStore,
+              cloudinaryService: widget.cloudinaryService,
+              operatorSession: widget.operatorSession,
+            ),
+          ),
+        );
+      },
+    ),
+    const SizedBox(height: 10),
+    EeActionButton(
+      icon: Icons.electric_bolt_outlined,
+      label: 'Levantamiento de bombas',
+      onPressed: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => PumpSurveyScreen(
+              store: widget.pumpSurveyStore,
+              operatorSession: widget.operatorSession,
+              cloudinaryService: widget.cloudinaryService,
+              motorReferenceStore: widget.motorReferenceStore,
+            ),
+          ),
+        );
+      },
+    ),
+    const SizedBox(height: 10),
+    EeActionButton(
+      icon: Icons.touch_app_outlined,
+      label: 'Tablero de ingreso',
+      isPrimary: false,
+      onPressed: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => InputControlsPlaygroundScreen(
+              consumptionStore: widget.consumptionStore,
+            ),
+          ),
+        );
+      },
+    ),
+    const SizedBox(height: 10),
+    EeActionButton(
+      icon: Icons.assignment_turned_in_outlined,
+      label: 'Seguimiento de reportes',
+      isPrimary: false,
+      onPressed: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) =>
+                MaintenanceHistoryScreen(store: widget.maintenanceReportStore),
+          ),
+        );
+      },
+    ),
+    const SizedBox(height: 10),
+    EeActionButton(
+      icon: Icons.bar_chart,
+      label: 'Panel administrador',
+      isPrimary: false,
+      onPressed: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AdminScreen(
+              reportStore: widget.reportStore,
+              consumptionStore: widget.consumptionStore,
+              maintenanceReportStore: widget.maintenanceReportStore,
+            ),
+          ),
+        );
+      },
+    ),
+  ];
 }
 
 class OperatorAccessScreen extends StatefulWidget {
@@ -837,11 +923,7 @@ class _OperatorAccessScreenState extends State<OperatorAccessScreen> {
   }
 
   Widget _buildAccessForms() {
-    return Column(
-      children: [
-        _buildLoginForm(),
-      ],
-    );
+    return Column(children: [_buildLoginForm()]);
   }
 
   Widget _buildLoginForm() {

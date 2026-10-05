@@ -18,6 +18,7 @@ abstract class OperatorAuthService {
     required String fullName,
     required String nationalId,
     required String pin,
+    required List<int> maintenanceZoneNumbers,
   });
 
   Future<void> signIn({required String nationalId, required String pin});
@@ -33,6 +34,7 @@ class DisabledOperatorAuthService implements OperatorAuthService {
     required String fullName,
     required String nationalId,
     required String pin,
+    required List<int> maintenanceZoneNumbers,
   }) {
     throw const OperatorAuthException(
       'La autenticacion no esta disponible en este entorno.',
@@ -81,13 +83,32 @@ class FirebaseOperatorAuthService implements OperatorAuthService {
     required String fullName,
     required String nationalId,
     required String pin,
+    required List<int> maintenanceZoneNumbers,
   }) async {
+    final normalizedName = fullName.trim();
+    final normalizedNationalId = nationalId.trim();
+    final normalizedZones = maintenanceZoneNumbers.toSet().toList()..sort();
+    if (normalizedName.length < 3) {
+      throw const OperatorAuthException('Ingresa tu nombre completo.');
+    }
+    if (!RegExp(r'^\d{10}$').hasMatch(normalizedNationalId)) {
+      throw const OperatorAuthException('La cedula debe tener 10 digitos.');
+    }
+    if (!RegExp(r'^\d{4,6}$').hasMatch(pin)) {
+      throw const OperatorAuthException(
+        'El PIN debe tener entre 4 y 6 digitos.',
+      );
+    }
+    if (normalizedZones.isEmpty ||
+        normalizedZones.any((zone) => zone < 1 || zone > 83)) {
+      throw const OperatorAuthException('Selecciona al menos una zona valida.');
+    }
     await _firebaseReady.timeout(timeout);
     User? createdUser;
     try {
       final credential = await _firebaseAuth
           .createUserWithEmailAndPassword(
-            email: operatorEmailForNationalId(nationalId),
+            email: operatorEmailForNationalId(normalizedNationalId),
             password: firebasePasswordForPin(pin),
           )
           .timeout(timeout);
@@ -98,8 +119,8 @@ class FirebaseOperatorAuthService implements OperatorAuthService {
         );
       }
 
-      final cleanName = fullName.trim();
-      final cleanNationalId = nationalId.trim();
+      final cleanName = normalizedName;
+      final cleanNationalId = normalizedNationalId;
       await createdUser.updateDisplayName(cleanName).timeout(timeout);
       final packageInfo = await PackageInfo.fromPlatform().timeout(timeout);
       await _firebaseFirestore
@@ -109,7 +130,8 @@ class FirebaseOperatorAuthService implements OperatorAuthService {
             'id': createdUser.uid,
             'displayName': cleanName,
             'nationalId': cleanNationalId,
-            'role': 'operator',
+            'role': 'maintenance',
+            'maintenanceZoneNumbers': normalizedZones,
             'active': true,
             'createdAt': FieldValue.serverTimestamp(),
             'createdByUid': createdUser.uid,
@@ -133,7 +155,9 @@ class FirebaseOperatorAuthService implements OperatorAuthService {
     } on FirebaseException catch (error) {
       await _rollbackCreatedUser(createdUser);
       throw OperatorAuthException(
-        'La cuenta no pudo completar su perfil en Firebase (${error.code}).',
+        error.code == 'permission-denied'
+            ? 'La cuenta se creo, pero Firebase rechazo el perfil. Las reglas de autorregistro aun no estan publicadas.'
+            : 'La cuenta no pudo completar su perfil en Firebase (${error.code}).',
       );
     } catch (_) {
       await _rollbackCreatedUser(createdUser);
