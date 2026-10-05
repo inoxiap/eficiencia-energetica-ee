@@ -266,3 +266,134 @@ class _MaintenanceRegistrationScreenState
     }
   }
 }
+
+class MaintenanceAddZoneScreen extends StatefulWidget {
+  const MaintenanceAddZoneScreen({
+    required this.operator,
+    required this.authService,
+    super.key,
+  });
+
+  final AuthenticatedOperator operator;
+  final OperatorAuthService authService;
+
+  @override
+  State<MaintenanceAddZoneScreen> createState() =>
+      _MaintenanceAddZoneScreenState();
+}
+
+class _MaintenanceAddZoneScreenState extends State<MaintenanceAddZoneScreen> {
+  late final List<int> _zones;
+  int? _zoneToAdd;
+  bool _isSubmitting = false;
+  String _message = '';
+  MessageType _messageType = MessageType.info;
+
+  @override
+  void initState() {
+    super.initState();
+    _zones = [...widget.operator.maintenanceZoneNumbers]..sort();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final availableZones = maintenanceZones
+        .where((zone) => !_zones.contains(zone.number))
+        .toList();
+    return AppShell(
+      bottomNavigationBar: const HomeNavigationBar(),
+      children: [
+        const EeHeader(
+          title: 'Agregar zona',
+          subtitle: 'Completa las zonas que tienes a tu cargo.',
+        ),
+        const SizedBox(height: 14),
+        InfoPanel(
+          children: [
+            Text(
+              'Tus zonas actuales',
+              style: Theme.of(context).textTheme.titleMediumBold,
+            ),
+            const SizedBox(height: 8),
+            if (_zones.isEmpty)
+              const Text('Todavia no tienes zonas registradas.')
+            else
+              for (final number in _zones) _zoneSummary(number),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<int>(
+              key: ValueKey(_zoneToAdd),
+              initialValue: _zoneToAdd,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Selecciona la zona que falta',
+                helperText: 'No puedes agregar una zona repetida.',
+              ),
+              items: availableZones
+                  .map(
+                    (zone) => DropdownMenuItem<int>(
+                      value: zone.number,
+                      child: Text(
+                        zone.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _isSubmitting
+                  ? null
+                  : (value) => setState(() => _zoneToAdd = value),
+            ),
+            const SizedBox(height: 12),
+            EeActionButton(
+              icon: Icons.add_location_alt_outlined,
+              label: _isSubmitting ? 'Agregando zona...' : 'Agregar zona',
+              onPressed: _isSubmitting || _zoneToAdd == null ? null : _addZone,
+            ),
+          ],
+        ),
+        if (_message.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          MessageBox(type: _messageType, message: _message),
+        ],
+      ],
+    );
+  }
+
+  Widget _zoneSummary(int number) {
+    final zone = maintenanceZoneByNumber(number);
+    if (zone == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text('Zona $number · ${zone.section} · ${zone.process}'),
+    );
+  }
+
+  Future<void> _addZone() async {
+    final number = _zoneToAdd;
+    if (number == null) return;
+    setState(() {
+      _isSubmitting = true;
+      _message = '';
+    });
+    try {
+      await widget.authService.addMaintenanceZone(zoneNumber: number);
+      if (!mounted) return;
+      setState(() {
+        _zones.add(number);
+        _zones.sort();
+        _zoneToAdd = null;
+        _isSubmitting = false;
+        _messageType = MessageType.success;
+        _message = 'Zona agregada correctamente a tu perfil.';
+      });
+    } on OperatorAuthException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _messageType = MessageType.error;
+        _message = error.message;
+      });
+    }
+  }
+}

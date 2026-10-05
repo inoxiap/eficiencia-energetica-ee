@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -73,69 +75,89 @@ class FirebaseMaintenanceReportStore implements MaintenanceReportStore {
 
   @override
   Future<String> saveLeakReport(LeakReport report) async {
-    await _firebaseReady.timeout(timeout);
-    final operator = await _requireOperator();
-    final packageInfo = await PackageInfo.fromPlatform().timeout(timeout);
-    final document = _firebaseFirestore
-        .collection('leak_reports')
-        .doc(report.id);
-    final counter = _firebaseFirestore
-        .collection('maintenance_counters')
-        .doc('leak_reports');
-    final tagNumber = await _firebaseFirestore
-        .runTransaction<String>((transaction) async {
-          final existing = await transaction.get(document);
-          if (existing.exists) {
-            final data = existing.data();
-            if (data?['createdByUid'] != operator.uid) {
-              throw const MaintenanceReportException(
-                'El identificador del reporte ya esta en uso.',
-              );
+    try {
+      await _firebaseReady.timeout(timeout);
+      final operator = await _requireOperator();
+      final packageInfo = await PackageInfo.fromPlatform().timeout(timeout);
+      final document = _firebaseFirestore
+          .collection('leak_reports')
+          .doc(report.id);
+      final counter = _firebaseFirestore
+          .collection('maintenance_counters')
+          .doc('leak_reports');
+      final tagNumber = await _firebaseFirestore
+          .runTransaction<String>((transaction) async {
+            final existing = await transaction.get(document);
+            if (existing.exists) {
+              final data = existing.data();
+              if (data?['createdByUid'] != operator.uid) {
+                throw const MaintenanceReportException(
+                  'El identificador del reporte ya esta en uso.',
+                );
+              }
+              final existingTag = data?['tagNumber'] as String? ?? '';
+              if (existingTag.isEmpty) {
+                throw const MaintenanceReportException(
+                  'El reporte existente no tiene identificacion.',
+                );
+              }
+              return existingTag;
             }
-            final existingTag = data?['tagNumber'] as String? ?? '';
-            if (existingTag.isEmpty) {
-              throw const MaintenanceReportException(
-                'El reporte existente no tiene identificacion.',
-              );
-            }
-            return existingTag;
-          }
 
-          final counterSnapshot = await transaction.get(counter);
-          final previous = counterSnapshot.data()?['nextNumber'];
-          final nextNumber = previous is int ? previous + 1 : 1;
-          final nextTag = 'F-${nextNumber.toString().padLeft(6, '0')}';
-          final data = report.toJson();
-          data.addAll({
-            'leakNumber': nextNumber,
-            'tagNumber': nextTag,
-            'createdAt': FieldValue.serverTimestamp(),
-            'createdByUid': operator.uid,
-            'createdByNameSnapshot': operator.displayName,
-            'updatedAt': FieldValue.serverTimestamp(),
-            'updatedByUid': operator.uid,
-            'appVersion': '${packageInfo.version}+${packageInfo.buildNumber}',
-            'platform': kIsWeb ? 'web' : 'android',
-            'source': 'manual',
-          });
-          transaction.set(counter, {
-            'nextNumber': nextNumber,
-            'updatedAt': FieldValue.serverTimestamp(),
-            'updatedByUid': operator.uid,
-          });
-          transaction.set(document, data);
-          return nextTag;
-        })
-        .timeout(timeout);
-    final confirmation = await document
-        .get(const GetOptions(source: Source.server))
-        .timeout(timeout);
-    if (!confirmation.exists) {
+            final counterSnapshot = await transaction.get(counter);
+            final previous = counterSnapshot.data()?['nextNumber'];
+            final nextNumber = previous is int ? previous + 1 : 1;
+            final nextTag = 'F-${nextNumber.toString().padLeft(6, '0')}';
+            final data = report.toJson();
+            data.addAll({
+              'leakNumber': nextNumber,
+              'tagNumber': nextTag,
+              'createdAt': FieldValue.serverTimestamp(),
+              'createdByUid': operator.uid,
+              'createdByNameSnapshot': operator.displayName,
+              'updatedAt': FieldValue.serverTimestamp(),
+              'updatedByUid': operator.uid,
+              'appVersion': '${packageInfo.version}+${packageInfo.buildNumber}',
+              'platform': kIsWeb ? 'web' : 'android',
+              'source': 'manual',
+            });
+            transaction.set(counter, {
+              'nextNumber': nextNumber,
+              'updatedAt': FieldValue.serverTimestamp(),
+              'updatedByUid': operator.uid,
+            });
+            transaction.set(document, data);
+            return nextTag;
+          })
+          .timeout(timeout);
+      final confirmation = await document
+          .get(const GetOptions(source: Source.server))
+          .timeout(timeout);
+      if (!confirmation.exists) {
+        throw const MaintenanceReportException(
+          'Firebase no confirmo el reporte de fuga.',
+        );
+      }
+      return tagNumber;
+    } on MaintenanceReportException {
+      rethrow;
+    } on FirebaseException catch (error) {
+      throw MaintenanceReportException(_friendlyFirestoreError(error));
+    } on TimeoutException {
       throw const MaintenanceReportException(
-        'Firebase no confirmo el reporte de fuga.',
+        'Firebase no respondio a tiempo. Revisa la conexion e intenta guardar nuevamente.',
       );
     }
-    return tagNumber;
+  }
+
+  String _friendlyFirestoreError(FirebaseException error) {
+    return switch (error.code) {
+      'permission-denied' =>
+        'Firebase rechazo el guardado del reporte. Verifica que tu usuario de mantenimiento este activo.',
+      'unavailable' || 'deadline-exceeded' =>
+        'Firebase no esta disponible. Revisa la conexion e intenta nuevamente.',
+      _ => 'Firebase no pudo guardar el reporte (${error.code}).',
+    };
   }
 
   @override

@@ -42,6 +42,7 @@ import 'services/operator_session.dart';
 import 'services/motor_reference_store.dart';
 import 'services/maintenance_report_store.dart';
 import 'services/operator_auth_service.dart';
+import 'services/operator_admin_service.dart';
 import 'services/pressure_reading_store.dart';
 import 'services/report_store.dart';
 import 'services/pump_survey_store.dart';
@@ -55,6 +56,7 @@ part 'screens/maintenance_history_screen.dart';
 part 'screens/maintenance_registration_screen.dart';
 part 'screens/maintenance_zone_directory_screen.dart';
 part 'screens/maintenance_week_screen.dart';
+part 'screens/admin_users_screen.dart';
 part 'screens/boiler_readings_history_screen.dart';
 part 'screens/pressure_entry_tab.dart';
 part 'screens/input_controls_playground_screen.dart';
@@ -448,6 +450,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_user == null) {
       return AppShell(children: _signedOutHome());
     }
+    if (!_user!.active) {
+      return AppShell(children: _inactiveHome());
+    }
     if (_user!.role == 'provider') {
       return AppShell(children: _providerHome());
     }
@@ -495,6 +500,20 @@ class _HomeScreenState extends State<HomeScreen> {
     const EeHeader(
       title: 'Acceso pendiente',
       subtitle: 'Tu cuenta aun no tiene un perfil asignado.',
+    ),
+    const SizedBox(height: 16),
+    EeActionButton(
+      icon: Icons.logout,
+      label: 'Cerrar sesion',
+      onPressed: _openUserAccess,
+    ),
+  ];
+
+  List<Widget> _inactiveHome() => [
+    const EeHeader(
+      title: 'Acceso desactivado',
+      subtitle:
+          'Contacta al administrador para solicitar nuevamente el acceso.',
     ),
     const SizedBox(height: 16),
     EeActionButton(
@@ -600,6 +619,23 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+    ),
+    const SizedBox(height: 10),
+    EeActionButton(
+      icon: Icons.add_location_alt_outlined,
+      label: 'Agregar zona a mi perfil',
+      isPrimary: false,
+      onPressed: () async {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => MaintenanceAddZoneScreen(
+              operator: _user!,
+              authService: widget.operatorAuthService,
+            ),
+          ),
+        );
+        await _refreshUser();
+      },
     ),
     const SizedBox(height: 10),
     EeActionButton(
@@ -838,6 +874,19 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     ),
+    if (_user!.role == 'admin') ...[
+      const SizedBox(height: 10),
+      EeActionButton(
+        icon: Icons.manage_accounts_outlined,
+        label: 'Administrar usuarios',
+        isPrimary: false,
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AdminUsersScreen(adminUid: _user!.uid),
+          ),
+        ),
+      ),
+    ],
   ];
 }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -23,6 +25,8 @@ abstract class OperatorAuthService {
 
   Future<void> signIn({required String nationalId, required String pin});
 
+  Future<void> addMaintenanceZone({required int zoneNumber});
+
   Future<void> signOut();
 }
 
@@ -43,6 +47,13 @@ class DisabledOperatorAuthService implements OperatorAuthService {
 
   @override
   Future<void> signIn({required String nationalId, required String pin}) {
+    throw const OperatorAuthException(
+      'La autenticacion no esta disponible en este entorno.',
+    );
+  }
+
+  @override
+  Future<void> addMaintenanceZone({required int zoneNumber}) {
     throw const OperatorAuthException(
       'La autenticacion no esta disponible en este entorno.',
     );
@@ -182,6 +193,78 @@ class FirebaseOperatorAuthService implements OperatorAuthService {
     } catch (_) {
       throw const OperatorAuthException(
         'No fue posible conectar con Firebase. Revisa la conexion e intenta otra vez.',
+      );
+    }
+  }
+
+  @override
+  Future<void> addMaintenanceZone({required int zoneNumber}) async {
+    if (zoneNumber < 1 || zoneNumber > 83) {
+      throw const OperatorAuthException('Selecciona una zona valida.');
+    }
+    await _firebaseReady.timeout(timeout);
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      throw const OperatorAuthException(
+        'Inicia sesion como usuario antes de agregar una zona.',
+      );
+    }
+    final packageInfo = await PackageInfo.fromPlatform().timeout(timeout);
+    final profile = _firebaseFirestore.collection('users').doc(user.uid);
+    try {
+      await _firebaseFirestore
+          .runTransaction<void>((transaction) async {
+            final snapshot = await transaction.get(profile);
+            final data = snapshot.data();
+            if (!snapshot.exists || data?['role'] != 'maintenance') {
+              throw const OperatorAuthException(
+                'Solo el equipo de mantenimiento puede agregar zonas.',
+              );
+            }
+            if (data?['active'] == false) {
+              throw const OperatorAuthException(
+                'Tu usuario esta inactivo y no puede agregar zonas.',
+              );
+            }
+            final currentZones =
+                (data?['maintenanceZoneNumbers'] is List
+                        ? (data?['maintenanceZoneNumbers'] as List)
+                              .whereType<num>()
+                              .map((zone) => zone.toInt())
+                        : <int>[])
+                    .toSet()
+                    .toList()
+                  ..sort();
+            if (currentZones.contains(zoneNumber)) {
+              throw const OperatorAuthException(
+                'Esa zona ya esta asociada a tu usuario.',
+              );
+            }
+            if (currentZones.length >= 20) {
+              throw const OperatorAuthException(
+                'Tu usuario ya tiene el maximo de zonas permitido.',
+              );
+            }
+            transaction.update(profile, {
+              'maintenanceZoneNumbers': [...currentZones, zoneNumber]..sort(),
+              'updatedAt': FieldValue.serverTimestamp(),
+              'updatedByUid': user.uid,
+              'appVersion': '${packageInfo.version}+${packageInfo.buildNumber}',
+              'platform': kIsWeb ? 'web' : 'android',
+            });
+          })
+          .timeout(timeout);
+    } on OperatorAuthException {
+      rethrow;
+    } on FirebaseException catch (error) {
+      throw OperatorAuthException(
+        error.code == 'permission-denied'
+            ? 'Firebase rechazo el cambio de zonas. Actualiza la aplicacion e intenta nuevamente.'
+            : 'No fue posible agregar la zona en Firebase (${error.code}).',
+      );
+    } on TimeoutException {
+      throw const OperatorAuthException(
+        'Firebase no respondio a tiempo. Revisa la conexion e intenta nuevamente.',
       );
     }
   }

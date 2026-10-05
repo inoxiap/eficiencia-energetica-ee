@@ -27,13 +27,15 @@ void main() {
     expect(find.text('Ingresar consumos'), findsOneWidget);
     expect(find.text('Registros'), findsOneWidget);
     expect(find.text('Panel administrador'), findsOneWidget);
+    expect(find.text('Administrar usuarios'), findsOneWidget);
 
     final moduleLabels = tester
         .widgetList<EeActionButton>(find.byType(EeActionButton))
         .map((button) => button.label)
         .toList();
     expect(moduleLabels.first, 'Ingresar consumos');
-    expect(moduleLabels[moduleLabels.length - 2], 'Seguimiento de reportes');
+    expect(moduleLabels[moduleLabels.length - 3], 'Seguimiento de reportes');
+    expect(moduleLabels.last, 'Administrar usuarios');
   });
 }
 
@@ -45,7 +47,7 @@ class _NamedUserSession implements OperatorSession {
     return const AuthenticatedOperator(
       uid: 'user-1',
       displayName: 'Jefferson Ordonez',
-      role: 'operator',
+      role: 'admin',
     );
   }
 }

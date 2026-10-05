@@ -1629,6 +1629,89 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   `build/web` por la restriccion de ejecutables; se retiro ese archivo y la web
   se publico correctamente. El instalador se entrega desde GitHub Releases.
 
+### 2026-10-05 - Correccion de guardado de reportes de fugas
+
+- Incidente: despues de subir la fotografia, `Reintentar guardado` mostraba
+  `Dart exception thrown from converted Future` y no asignaba el identificador.
+- Diagnostico: la transaccion de `leak_reports` actualiza
+  `maintenance_counters/leak_reports`, pero las reglas solo permitian ese
+  contador a usuarios internos; el equipo de mantenimiento recibia
+  `permission-denied`.
+- Correccion: mantenimiento puede leer y actualizar su contador secuencial;
+  se agrego una prueba de reglas para reservar el contador y crear un reporte
+  propio. El servicio Flutter ahora convierte errores de Firestore y timeout
+  en mensajes claros para el usuario.
+- Archivos: `ee_flutter/firestore.rules`,
+  `ee_flutter/functions/test/firestore.rules.test.ts` y
+  `ee_flutter/lib/services/maintenance_report_store.dart`.
+- Pruebas: `npm run build` de Functions aprobado; reglas en Emulator Suite,
+  22 pruebas aprobadas; `flutter analyze` aprobado; `flutter test`, 59 pruebas
+  aprobadas; `git diff --check` aprobado.
+- Despliegue: pendiente de una nueva aprobacion para publicar la correccion;
+  la version productiva actual sigue siendo `1.7.6+17`.
+
+### 2026-10-05 - Responsables visibles en la semana de auditoria
+
+- Solicitud: mostrar los nombres de los responsables en cada asignacion
+  semanal, no solo los numeros de zona.
+- Correccion: cada tarjeta ahora muestra la zona y proceso a auditar, la
+  seccion y `Responsable(s)` con los nombres del catalogo de zonificacion.
+- Archivo: `ee_flutter/lib/screens/maintenance_week_screen.dart`.
+- Pruebas: `flutter analyze --no-pub --no-fatal-infos` aprobado; pruebas
+  focalizadas de catalogo y pantalla inicial aprobadas; `git diff --check`
+  aprobado.
+- Despliegue: ninguno; queda pendiente incorporarlo en la proxima version
+  publicada junto con la correccion de guardado de fugas.
+
+### 2026-10-05 - Agregar zonas despues del registro
+
+- Solicitud: permitir que un usuario de mantenimiento agregue una zona que
+  olvido registrar inicialmente.
+- Correccion: se agrego `Agregar zona a mi perfil` en la pantalla principal y
+  una pantalla con selector de zonas disponibles, zonas actuales, validacion
+  de duplicados y limite de 20 zonas. El perfil se refresca al volver.
+- Seguridad: Firestore permite actualizar unicamente el propio perfil de
+  mantenimiento y solo los campos de zonas, trazabilidad y plataforma. Se
+  agrego prueba que bloquea modificar el perfil de otro usuario.
+- Archivos: `ee_flutter/lib/main.dart`,
+  `ee_flutter/lib/screens/maintenance_registration_screen.dart`,
+  `ee_flutter/lib/services/operator_auth_service.dart`,
+  `ee_flutter/firestore.rules` y pruebas de reglas.
+- Pruebas: `flutter analyze` aprobado; pruebas Flutter focalizadas aprobadas;
+  Functions compiladas previamente; Emulator Suite con reglas, 23 pruebas
+  aprobadas; `git diff --check` aprobado.
+- Despliegue: ninguno; requiere incluirse en la proxima version publicada.
+
+### 2026-10-05 - Utilidades administrativas inspiradas en Auditoria 5S
+
+- Solicitud: inspeccionar utilidades pequeñas de Auditoria 5S e incorporarlas
+  en Eficiencia Energetica, empezando por la administracion de usuarios.
+- Hallazgo: Auditoria 5S tiene listado de usuarios, busqueda, confirmacion y
+  eliminacion administrativa; tambien cuenta con historial, exportaciones y
+  edicion de zonas. Eficiencia ya tenia zonas, responsables y seguimiento, por
+  lo que se priorizo el control de accesos.
+- Resultado: se agrego `Administrar usuarios` solo para perfiles admin, con
+  consulta ordenada, busqueda por nombre/cedula/rol/zona, estado activo y
+  confirmacion para desactivar usuarios. Las cuentas desactivadas ven una
+  pantalla de acceso bloqueado y sus reportes historicos se conservan.
+- Seguridad: Firestore permite al admin desactivar otro perfil solo mediante
+  los campos `active`, `status`, `updatedAt` y `updatedByUid`; no permite
+  auto-desactivacion ni borrado fisico desde el cliente. Se eligio esta
+  alternativa porque borrar el documento no elimina la cuenta de Firebase
+  Authentication.
+- Archivos: `ee_flutter/lib/services/operator_admin_service.dart`,
+  `ee_flutter/lib/screens/admin_users_screen.dart`, `ee_flutter/lib/main.dart`,
+  `ee_flutter/firestore.rules`, `ee_flutter/functions/test/firestore.rules.test.ts`
+  y `ee_flutter/test/widget_test.dart`.
+- Pruebas: `flutter analyze --no-pub --no-fatal-infos` aprobado; `flutter test
+  --no-pub` con 58 pruebas aprobadas; reglas Firestore Emulator con 25 pruebas
+  aprobadas; prueba widget focalizada aprobada despues del ajuste de visibilidad;
+  `git diff --check` aprobado.
+- Despliegue: ninguno. La funcion queda local para revision y aprobacion de Jeff.
+- Pendiente: revisar en el emulador la pantalla administrativa con una cuenta
+  admin de prueba y decidir si despues se requiere borrado real de Auth mediante
+  una funcion administrativa separada.
+
 ## Plantilla para futuras entradas
 
 ```markdown

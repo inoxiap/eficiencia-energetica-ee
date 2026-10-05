@@ -222,6 +222,18 @@ async function seedInternalUser(uid: string) {
   });
 }
 
+async function seedMaintenanceUser(uid: string) {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), `users/${uid}`), {
+      displayName: "Equipo de mantenimiento",
+      role: "maintenance",
+      active: true,
+      status: "active",
+      maintenanceZoneNumbers: [1],
+    });
+  });
+}
+
 describe("Firestore rules", () => {
   it("allows public app update configuration reads", async () => {
     await environment.withSecurityRulesDisabled(async (context) => {
@@ -280,6 +292,35 @@ describe("Firestore rules", () => {
         updatedAt: serverTimestamp(),
         updatedByUid: "operator-1",
         source: "self_registration",
+      }),
+    );
+  });
+
+  it("allows an admin to deactivate another user without deleting history", async () => {
+    await seedMaintenanceUser("maintenance-to-disable");
+    const admin = environment
+      .authenticatedContext("admin-1", {role: "admin"})
+      .firestore();
+    await assertSucceeds(
+      updateDoc(doc(admin, "users/maintenance-to-disable"), {
+        active: false,
+        status: "inactive",
+        updatedAt: serverTimestamp(),
+        updatedByUid: "admin-1",
+      }),
+    );
+  });
+
+  it("rejects an admin from deactivating its own profile", async () => {
+    const admin = environment
+      .authenticatedContext("admin-1", {role: "admin"})
+      .firestore();
+    await assertFails(
+      updateDoc(doc(admin, "users/admin-1"), {
+        active: false,
+        status: "inactive",
+        updatedAt: serverTimestamp(),
+        updatedByUid: "admin-1",
       }),
     );
   });
@@ -387,6 +428,57 @@ describe("Firestore rules", () => {
     );
     await assertFails(updateDoc(counter, {nextNumber: 4}));
     await assertFails(deleteDoc(counter));
+  });
+
+  it("allows maintenance to reserve the leak counter for its own reports", async () => {
+    await seedMaintenanceUser("maintenance-1");
+    const maintenance = environment
+      .authenticatedContext("maintenance-1")
+      .firestore();
+    const counter = doc(maintenance, "maintenance_counters/leak_reports");
+    await assertSucceeds(
+      setDoc(counter, {
+        nextNumber: 1,
+        updatedAt: serverTimestamp(),
+        updatedByUid: "maintenance-1",
+      }),
+    );
+    const report = leakReport("maintenance-1");
+    await assertSucceeds(
+      setDoc(doc(maintenance, "leak_reports/maintenance-leak-1"), report),
+    );
+    await assertSucceeds(
+      updateDoc(counter, {
+        nextNumber: 2,
+        updatedAt: serverTimestamp(),
+        updatedByUid: "maintenance-1",
+      }),
+    );
+  });
+
+  it("allows maintenance to add a zone only to its own profile", async () => {
+    await seedMaintenanceUser("maintenance-1");
+    const maintenance = environment
+      .authenticatedContext("maintenance-1")
+      .firestore();
+    await assertSucceeds(
+      updateDoc(doc(maintenance, "users/maintenance-1"), {
+        maintenanceZoneNumbers: [1, 2],
+        updatedAt: serverTimestamp(),
+        updatedByUid: "maintenance-1",
+      }),
+    );
+
+    const otherMaintenance = environment
+      .authenticatedContext("maintenance-2")
+      .firestore();
+    await assertFails(
+      updateDoc(doc(otherMaintenance, "users/maintenance-1"), {
+        maintenanceZoneNumbers: [1, 2, 3],
+        updatedAt: serverTimestamp(),
+        updatedByUid: "maintenance-2",
+      }),
+    );
   });
 
   it("rejects a forged createdByUid", async () => {

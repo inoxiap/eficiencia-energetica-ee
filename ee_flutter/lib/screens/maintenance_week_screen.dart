@@ -51,13 +51,27 @@ class MaintenanceWeekScreen extends StatelessWidget {
             for (final assignment in assignments)
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
-                child: Text(
-                  'Zona ${assignment.source} audita Zona ${assignment.target}: ${maintenanceZoneByNumber(assignment.target)?.process ?? ''}',
-                ),
+                child: _assignmentDetails(assignment.target),
               ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _assignmentDetails(int target) {
+    final zone = maintenanceZoneByNumber(target);
+    if (zone == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Auditar: ${zone.process}',
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        Text('Sección: ${zone.section} · Zona ${zone.number}'),
+        Text('Responsable(s): ${zone.responsibles.join(', ')}', softWrap: true),
+      ],
     );
   }
 
