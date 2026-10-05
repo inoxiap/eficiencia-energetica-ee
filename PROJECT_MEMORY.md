@@ -16,7 +16,7 @@ o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
   `https://github.com/inoxiap/eficiencia-energetica-ee.git`
 - Rama principal: `main`.
 - Aplicacion activa: `ee_flutter/`.
-- Version Flutter web y Android publicada: `1.7.7+18`.
+- Version Flutter web y Android publicada: `1.7.8+19`.
 - La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
   historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
 
@@ -66,8 +66,8 @@ necesitar criterio tecnico avanzado para completar un levantamiento.
 - Plan Firebase: Spark.
 - Web/PWA:
   `https://eficiencia-energetica-ee.web.app`
-- Android vigente: release `v1.7.7`, build 18, publicado en GitHub.
-- `app_config/mobile_app` anuncia Android `1.7.7`, build 18.
+- Android vigente: release `v1.7.8`, build 19, publicado en GitHub.
+- `app_config/mobile_app` anuncia Android `1.7.8`, build 19.
 - Firebase Hosting publica `ee_flutter/build/web`.
 - El proveedor Firebase Authentication Email/Password fue habilitado y probado
   en produccion el 2026-07-16.
@@ -1739,7 +1739,23 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
 - Archivo: `ee_flutter/lib/main.dart`.
 - Pruebas: `flutter analyze --no-pub --no-fatal-infos`, `flutter test --no-pub`
   con 58 pruebas y `git diff --check`, todos aprobados.
-- Despliegue: ninguno; queda local para revision de Jeff.
+- Despliegue: publicado como `1.7.8+19` despues de la aprobacion de Jeff.
+
+### 2026-10-05 - Publicacion de botones discretos 1.7.8
+
+- Solicitud: subir a web y Android el ajuste visual de los accesos de
+  mantenimiento.
+- Resultado: Flutter Web `1.7.8+19` publicado en Hosting; APK release `v1.7.8`
+  publicado en GitHub; `app_config/mobile_app` actualizado con version, build,
+  mensaje y URL de descarga.
+- Enlaces: web `https://eficiencia-energetica-ee.web.app`; APK
+  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/download/v1.7.8/eficiencia-energetica-ee-1.7.8-build19.apk`.
+- Archivos/version: `ee_flutter/pubspec.yaml` paso a `1.7.8+19`; commit
+  `8737f3b` publicado en `main`.
+- Pruebas/builds: `flutter build web --release` y `flutter build apk
+  --release` aprobados; `flutter analyze` y `flutter test` ya aprobados para
+  este cambio; Hosting y APK verificados con HTTP 200.
+- Despliegue: completado. No se modificaron reglas ni datos funcionales.
 
 ## Plantilla para futuras entradas
 
