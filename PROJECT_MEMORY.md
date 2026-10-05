@@ -16,7 +16,7 @@ o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
   `https://github.com/inoxiap/eficiencia-energetica-ee.git`
 - Rama principal: `main`.
 - Aplicacion activa: `ee_flutter/`.
-- Version Flutter web y Android publicada: `1.7.6+17`.
+- Version Flutter web y Android publicada: `1.7.7+18`.
 - La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
   historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
 
@@ -66,8 +66,8 @@ necesitar criterio tecnico avanzado para completar un levantamiento.
 - Plan Firebase: Spark.
 - Web/PWA:
   `https://eficiencia-energetica-ee.web.app`
-- Android vigente: release `v1.7.4`, build 15, publicado en GitHub.
-- `app_config/mobile_app` anuncia Android y web `1.7.4`, build 15.
+- Android vigente: release `v1.7.7`, build 18, publicado en GitHub.
+- `app_config/mobile_app` anuncia Android `1.7.7`, build 18.
 - Firebase Hosting publica `ee_flutter/build/web`.
 - El proveedor Firebase Authentication Email/Password fue habilitado y probado
   en produccion el 2026-07-16.
@@ -1711,6 +1711,23 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
 - Pendiente: revisar en el emulador la pantalla administrativa con una cuenta
   admin de prueba y decidir si despues se requiere borrado real de Auth mediante
   una funcion administrativa separada.
+
+### 2026-10-05 - Publicacion de utilidades administrativas 1.7.7
+
+- Solicitud: subir la actualizacion aprobada de administracion de usuarios y
+  las correcciones acumuladas de mantenimiento.
+- Resultado: se publico Flutter Web `1.7.7+18`, reglas Firestore e indices en
+  produccion. Se publico el APK release en GitHub como `v1.7.7` y se actualizo
+  `app_config/mobile_app` con la version, build, mensaje y URL del instalador.
+- Enlaces: web `https://eficiencia-energetica-ee.web.app`; APK
+  `https://github.com/inoxiap/eficiencia-energetica-ee/releases/download/v1.7.7/eficiencia-energetica-ee-1.7.7-build18.apk`.
+- Archivos/version: `ee_flutter/pubspec.yaml` paso a `1.7.7+18`; commit
+  `a1057dc` publicado en `main`.
+- Pruebas/builds: `flutter build web --release` aprobado; `flutter build apk
+  --release` aprobado (56.8 MB); Hosting HTTP 200; APK HTTP 200 con tipo
+  `application/vnd.android.package-archive`; pruebas Flutter y reglas ya
+  aprobadas antes de publicar.
+- Despliegue: completado. No se guardaron credenciales en el repositorio.
 
 ## Plantilla para futuras entradas
 
