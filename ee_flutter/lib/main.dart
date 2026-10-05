@@ -620,42 +620,48 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     ),
-    const SizedBox(height: 10),
-    EeActionButton(
-      icon: Icons.add_location_alt_outlined,
-      label: 'Agregar zona a mi perfil',
-      isPrimary: false,
-      onPressed: () async {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => MaintenanceAddZoneScreen(
-              operator: _user!,
-              authService: widget.operatorAuthService,
-            ),
+    const SizedBox(height: 8),
+    Align(
+      alignment: Alignment.center,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 8,
+        runSpacing: 2,
+        children: [
+          TextButton.icon(
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => MaintenanceAddZoneScreen(
+                    operator: _user!,
+                    authService: widget.operatorAuthService,
+                  ),
+                ),
+              );
+              await _refreshUser();
+            },
+            icon: const Icon(Icons.add_location_alt_outlined, size: 18),
+            label: const Text('Agregar zona'),
           ),
-        );
-        await _refreshUser();
-      },
-    ),
-    const SizedBox(height: 10),
-    EeActionButton(
-      icon: Icons.calendar_month_outlined,
-      label: 'Mi semana de auditoría',
-      onPressed: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => MaintenanceWeekScreen(operator: _user!),
-        ),
-      ),
-    ),
-    const SizedBox(height: 10),
-    EeActionButton(
-      icon: Icons.groups_outlined,
-      label: 'Zonas y responsables',
-      isPrimary: false,
-      onPressed: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const MaintenanceZoneDirectoryScreen(),
-        ),
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => MaintenanceWeekScreen(operator: _user!),
+              ),
+            ),
+            icon: const Icon(Icons.calendar_month_outlined, size: 18),
+            label: const Text('Mi semana'),
+          ),
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const MaintenanceZoneDirectoryScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.groups_outlined, size: 18),
+            label: const Text('Zonas y responsables'),
+          ),
+        ],
       ),
     ),
   ];

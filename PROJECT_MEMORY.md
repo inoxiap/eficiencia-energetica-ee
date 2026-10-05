@@ -1729,6 +1729,18 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   aprobadas antes de publicar.
 - Despliegue: completado. No se guardaron credenciales en el repositorio.
 
+### 2026-10-05 - Botones discretos del inicio de mantenimiento
+
+- Solicitud: hacer mas discretos `Agregar zona`, `Mi semana` y `Zonas y
+  responsables`, siguiendo el patron visual de Auditoria 5S.
+- Correccion: los tres accesos ahora usan `TextButton.icon` dentro de un
+  `Wrap` centrado, con iconos pequenos y etiquetas cortas; se mantienen sus
+  navegaciones y la recarga del perfil despues de agregar una zona.
+- Archivo: `ee_flutter/lib/main.dart`.
+- Pruebas: `flutter analyze --no-pub --no-fatal-infos`, `flutter test --no-pub`
+  con 58 pruebas y `git diff --check`, todos aprobados.
+- Despliegue: ninguno; queda local para revision de Jeff.
+
 ## Plantilla para futuras entradas
 
 ```markdown
