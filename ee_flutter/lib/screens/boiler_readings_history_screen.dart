@@ -486,7 +486,7 @@ class _ReadingRow extends StatelessWidget {
 
   static String _friendlyUnit(String unit) {
     return switch (unit) {
-      'counter_x10_L' => 'x10 L',
+      'counter_x10_L' => 'L',
       pendingUnit => 's/u',
       '' => 's/u',
       _ => unit,

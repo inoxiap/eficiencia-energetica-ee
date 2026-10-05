@@ -48,18 +48,21 @@ contadores:
   galones. No se aplica conversion.
 - Bunker historico anterior al cambio: el contador se ingresaba en litros y el
   valor normalizado se conserva como `gal = litros / 3.79`.
-- Agua: unidades del contador, donde cada unidad representa 10 litros. El valor
-  normalizado se guarda como `gal = unidades x 2.64`.
-- Vapor: kilogramos (`kg`), sin conversion adicional.
+- Agua Alfa Laval: la lectura se ingresa y conserva como litros (`L`). El valor
+  normalizado se obtiene primero por delta horario en litros y luego se
+  convierte con el factor operativo confirmado `274`: `gal = litros x 274`.
+- Vapor: la toma real se conserva en kilogramos (`kg`). En la vista
+  `Normalizadas`, el delta horario calculado se multiplica por `1000` porque
+  los indicadores representan miles.
 
-La equivalencia fisica exacta es 1 galon estadounidense =
-3.785411784 litros; por eso 10 litros equivalen a 2.64172 galones. La app usa
-los factores operativos redondeados 3.79 y 2.64 confirmados para los medidores
-historicos de planta. El factor 3.79 ya no se usa en capturas nuevas de bunker
-de Alfa Laval; el factor 2.64 de agua no cambia. La app guarda tanto el valor
-original y su unidad como el valor normalizado. El vapor conserva el valor
-acumulado original en kilogramos. Distral 900 y Cleaver Brooks mantienen sus
-lecturas habilitadas en galones y no solicitan vapor.
+La app guarda tanto el valor original y su unidad como el valor normalizado.
+El factor `274` es una regla operativa de planta, no una conversion fisica
+general de litros a galones; por eso debe permanecer documentado y visible.
+Los registros historicos que aun contienen la marca interna
+`counter_x10_L` se interpretan ahora como litros para aplicar la nueva regla,
+pero esa nomenclatura ya no se muestra al usuario ni se usa en capturas nuevas.
+Distral 900 y Cleaver Brooks mantienen sus lecturas habilitadas en galones y no
+solicitan vapor.
 
 Entre el cambio fisico del flujometro y la version 1.5.0, 49 lecturas quedaron
 declaradas como litros aunque el nuevo equipo ya mostraba galones. La app, el
@@ -125,7 +128,7 @@ una lectura corregida.
 
 Las cantidades se calculan con precision completa y solo se redondean al
 mostrarse. Bunker y agua se presentan en galones; vapor, cuando la caldera lo
-mide, en kilogramos. Cada medidor se procesa por separado: una muestra sin valor
+mide, se presenta en miles de kg en la vista normalizada. Cada medidor se procesa por separado: una muestra sin valor
 para ese medidor no corta la secuencia, y el delta se reparte entre las tomas
 validas que la rodean. Un contador que retrocede invalida el intervalo afectado;
 no se inventa un delta negativo ni se extrapola mas alla de la ultima lectura

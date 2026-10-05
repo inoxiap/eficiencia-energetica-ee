@@ -156,8 +156,9 @@ void main() {
     );
     await tester.ensureVisible(find.byKey(const Key('normalized-bunker-0')));
     expect(find.text('15'), findsOneWidget);
-    expect(find.text('30'), findsNWidgets(2));
-    expect(find.text('50'), findsOneWidget);
+    expect(find.text('30'), findsOneWidget);
+    expect(find.text('50.000'), findsOneWidget);
+    expect(find.text('30.000'), findsOneWidget);
     expect(find.text('gal'), findsWidgets);
     expect(find.text('kg'), findsWidgets);
     expect(find.text('12:00'), findsNothing);

@@ -83,8 +83,7 @@ void main() {
 
   test('Alfa Laval inputs preserve the plant conversion factors', () {
     expect(alfaBunkerGallonsFromLiters(3790), closeTo(1000, 0.0001));
-    expect(alfaWaterGallonsFromCounter(100), closeTo(264, 0.0001));
-    expect(alfaWaterLitersFromCounter(100), closeTo(1000, 0.0001));
+    expect(alfaWaterGallonsFromLiters(100), closeTo(27400, 0.0001));
   });
 
   test('historical safety limits flag only extraordinary hourly jumps', () {
@@ -211,12 +210,12 @@ void main() {
         boilerName: alfaLavalBoiler,
         boilerId: boiler.id,
         fuelTotal: alfaBunkerGallonsFromLiters(3790),
-        waterTotal: alfaWaterGallonsFromCounter(100),
+        waterTotal: alfaWaterGallonsFromLiters(100),
         steamTotal: 500,
         boilerPressurePsi: 151,
         originalInputs: const {
           'bunker': {'value': 3790, 'unit': 'L'},
-          'water': {'value': 100, 'unit': 'counter_x10_L'},
+          'water': {'value': 100, 'unit': 'L'},
         },
         validationReferenceVersion: boilerSafetyReferenceVersion,
         fuelConsumption: null,
@@ -229,7 +228,7 @@ void main() {
 
       expect(json['schemaVersion'], boilerConsumptionSchemaVersion);
       expect(restored.originalInputs['bunker']['value'], 3790);
-      expect(restored.originalInputs['water']['unit'], 'counter_x10_L');
+      expect(restored.originalInputs['water']['unit'], 'L');
       expect(restored.validationReferenceVersion, boilerSafetyReferenceVersion);
     },
   );

@@ -1951,6 +1951,33 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   `audit_logs`, dejando constancia de que el rol y estado activo se conservaron.
 - Despliegue: no se modifico codigo, reglas ni datos de consumos.
 
+### 2026-10-05 - Factor confirmado para agua y escala normalizada de vapor
+
+- Solicitud: en las lecturas de agua de Alfa Laval, tratar el valor ingresado
+  como litros y convertirlo a galones con el factor operativo confirmado `274`.
+  El usuario confirmo expresamente que el factor es 274, aunque sea alto. En
+  vapor, multiplicar por `1000` unicamente el valor normalizado; las tomas
+  reales permanecen en kg.
+- Resultado: la captura de Alfa Laval muestra y guarda agua en `L`, el calculo
+  canonico usa `litros * 274`, y la vista normalizada muestra agua en galones y
+  vapor en kg escalado por 1000. Se retiro `x10` de los textos visibles.
+- Compatibilidad: los registros historicos con la unidad tecnica
+  `counter_x10_L` se leen como litros bajo la regla nueva, sin reescribir
+  documentos existentes; ese identificador solo permanece internamente para
+  compatibilidad.
+- Archivos principales: `ee_flutter/lib/domain/boiler_consumption.dart`,
+  `ee_flutter/lib/domain/boiler_hourly_normalization.dart`,
+  `ee_flutter/lib/main.dart`,
+  `ee_flutter/lib/screens/boiler_readings_history_screen.dart`,
+  `ee_flutter/docs/FORMULAS_Y_UNIDADES.md` y pruebas de consumo/historial.
+- Pruebas: 69 pruebas Flutter aprobadas y `flutter analyze --no-pub` sin
+  hallazgos. Los builds locales web y APK release tambien aprobaron.
+- Artefactos locales: `ee_flutter/build/web` y
+  `ee_flutter/build/app/outputs/flutter-apk/app-release.apk` (56.9 MB).
+- Despliegue: no se publico esta modificacion en Firebase Hosting ni como APK.
+- Decision: el factor 274 es una regla operativa de planta confirmada por el
+  usuario, no una conversion fisica general. No se guardan secretos ni PIN.
+
 ## Plantilla para futuras entradas
 
 ```markdown

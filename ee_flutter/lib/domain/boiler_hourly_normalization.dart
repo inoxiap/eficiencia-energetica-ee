@@ -126,8 +126,8 @@ extension on _Metric {
           (_Metric.bunker, 'L') => rawValue / alfaBunkerLitersPerGallon,
           (_Metric.water, 'gal') => rawValue,
           (_Metric.water, 'counter_x10_L') =>
-            rawValue * alfaWaterGallonsPerCounterUnit,
-          (_Metric.water, 'L') => rawValue / alfaBunkerLitersPerGallon,
+            rawValue * alfaWaterGallonsPerLiter,
+          (_Metric.water, 'L') => rawValue * alfaWaterGallonsPerLiter,
           (_Metric.steam, 'kg') => rawValue,
           _ => null,
         };
@@ -184,6 +184,8 @@ class _HourAccumulator {
     hourEnd: hourEnd,
     bunkerGallons: _hourlyEstimate(_Metric.bunker),
     waterGallons: _hourlyEstimate(_Metric.water),
-    steamKg: _hourlyEstimate(_Metric.steam),
+    steamKg: _hourlyEstimate(_Metric.steam) == null
+        ? null
+        : _hourlyEstimate(_Metric.steam)! * alfaSteamNormalizedMultiplier,
   );
 }

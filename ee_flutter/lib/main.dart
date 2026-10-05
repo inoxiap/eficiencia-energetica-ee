@@ -2425,10 +2425,10 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
                   _buildConsumptionOdometer(
                     label: 'Lectura acumulada de agua',
                     helper: _isAlfaLaval
-                        ? 'Cada unidad del contador equivale a 10 litros.'
+                        ? 'Lectura acumulada del medidor en litros.'
                         : 'Lectura acumulada del medidor en galones.',
                     value: _waterInputValue,
-                    unit: _isAlfaLaval ? 'x10 L' : 'gal',
+                    unit: _isAlfaLaval ? 'L' : 'gal',
                     keyPrefix: 'consumption-water',
                     onChanged: (value) =>
                         setState(() => _waterInputValue = value),
@@ -2646,18 +2646,16 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
     final waterInput = _waterInputValue.toDouble();
     final fuelTotal = fuelInput;
     final waterTotal = _isAlfaLaval
-        ? alfaWaterGallonsFromCounter(waterInput)
+        ? alfaWaterGallonsFromLiters(waterInput)
         : waterInput;
     final steamTotal = boiler.readsSteam ? _steamInputValue.toDouble() : null;
     final originalInputs = <String, dynamic>{
       'bunker': {'value': fuelInput, 'unit': 'gal', 'gallons': fuelTotal},
       'water': {
         'value': waterInput,
-        'unit': _isAlfaLaval ? 'counter_x10_L' : 'gal',
+        'unit': _isAlfaLaval ? 'L' : 'gal',
         'gallons': waterTotal,
-        if (_isAlfaLaval) 'litersPerCounterUnit': alfaWaterLitersPerCounterUnit,
-        if (_isAlfaLaval)
-          'gallonsPerCounterUnit': alfaWaterGallonsPerCounterUnit,
+        if (_isAlfaLaval) 'gallonsPerLiter': alfaWaterGallonsPerLiter,
       },
       if (boiler.readsSteam)
         'steam': {'value': steamTotal, 'unit': 'kg', 'kilograms': steamTotal},
@@ -2839,7 +2837,7 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
                 ),
                 Text(
                   _isAlfaLaval
-                      ? 'Agua: ${Formats.two(alfaWaterLitersFromCounter(_waterInputValue.toDouble()))} L = '
+                      ? 'Agua: ${Formats.two(_waterInputValue.toDouble())} L = '
                             '${Formats.two(reading.waterTotal)} gal'
                       : 'Agua: ${Formats.two(reading.waterTotal)} '
                             '(${_unitLabel(reading.waterUnit)})',
@@ -2976,7 +2974,7 @@ class _ConsumptionEntryScreenState extends State<ConsumptionEntryScreen> {
       _fuelInputValue = alfaBunkerMeterInputGallons(reading).round();
       _waterInputValue =
           (_originalInputValue(reading, 'water') ??
-                  reading.waterTotal / alfaWaterGallonsPerCounterUnit)
+                  reading.waterTotal / alfaWaterGallonsPerLiter)
               .round();
     } else {
       _fuelInputValue = reading.fuelTotal.round();

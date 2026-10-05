@@ -71,7 +71,10 @@ void main() {
     expect(result[0].bunkerGallons, closeTo(37 * 60 / 142, 0.0001));
     expect(result[1].bunkerGallons, closeTo(3 + 37 * 48 / 142, 0.0001));
     expect(result[1].waterGallons, closeTo(12 + 144 * 48 / 142, 0.0001));
-    expect(result[1].steamKg, closeTo(24 + 288 * 48 / 142, 0.0001));
+    expect(
+      result[1].steamKg,
+      closeTo((24 + 288 * 48 / 142) * alfaSteamNormalizedMultiplier, 0.0001),
+    );
     expect(result[2].bunkerGallons, closeTo(9, 0.0001));
   });
 
@@ -160,7 +163,7 @@ void main() {
     for (final hour in result) {
       expect(hour.bunkerGallons, 10);
       expect(hour.waterGallons, 20);
-      expect(hour.steamKg, 20);
+      expect(hour.steamKg, 20000);
     }
   });
 
@@ -176,7 +179,7 @@ void main() {
           steam: 20,
           originalInputs: {
             'bunker': {'value': 100, 'unit': 'gal', 'gallons': 100000},
-            'water': {'value': 10, 'unit': 'counter_x10_L', 'gallons': 26400},
+            'water': {'value': 10, 'unit': 'L', 'gallons': 2740},
             'steam': {'value': 20, 'unit': 'kg', 'kilograms': 20000},
           },
         ),
@@ -188,7 +191,7 @@ void main() {
           steam: 30,
           originalInputs: {
             'bunker': {'value': 110, 'unit': 'gal', 'gallons': 110000},
-            'water': {'value': 11, 'unit': 'counter_x10_L', 'gallons': 29040},
+            'water': {'value': 11, 'unit': 'L', 'gallons': 3014},
             'steam': {'value': 30, 'unit': 'kg', 'kilograms': 30000},
           },
         ),
@@ -196,8 +199,8 @@ void main() {
 
       expect(result, hasLength(1));
       expect(result.single.bunkerGallons, 10);
-      expect(result.single.waterGallons, closeTo(2.64, 0.00001));
-      expect(result.single.steamKg, 10);
+      expect(result.single.waterGallons, closeTo(274, 0.00001));
+      expect(result.single.steamKg, 10000);
     },
   );
 
@@ -321,15 +324,15 @@ void main() {
       closeTo(0.016034, 0.00001),
     ]);
     expect(result.take(5).map((hour) => hour.steamKg), [
-      closeTo(0.013548, 0.00001),
-      closeTo(0.013560, 0.00001),
-      closeTo(0.014229, 0.00001),
-      closeTo(0.013947, 0.00001),
-      closeTo(0.012414, 0.00001),
+      closeTo(13.548, 0.001),
+      closeTo(13.560, 0.001),
+      closeTo(14.229, 0.001),
+      closeTo(13.947, 0.001),
+      closeTo(12.414, 0.001),
     ]);
     expect(result.last.bunkerGallons, closeTo(0.252414, 0.00001));
     expect(result.last.waterGallons, closeTo(0.016034, 0.00001));
-    expect(result.last.steamKg, closeTo(0.012414, 0.00001));
+    expect(result.last.steamKg, closeTo(12.414, 0.001));
   });
 
   test('normalizes canonical units stored with original meter inputs', () {
@@ -364,7 +367,7 @@ void main() {
     for (final hour in result) {
       expect(hour.bunkerGallons, 10);
       expect(hour.waterGallons, 20);
-      expect(hour.steamKg, 20);
+      expect(hour.steamKg, 20000);
     }
   });
 

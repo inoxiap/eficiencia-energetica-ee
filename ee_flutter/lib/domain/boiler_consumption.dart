@@ -2,8 +2,8 @@ const boilerConsumptionSchemaVersion = 4;
 const defaultBoilerPressureUnit = 'psi';
 const pendingUnit = 'pending_confirmation';
 const alfaBunkerLitersPerGallon = 3.79;
-const alfaWaterLitersPerCounterUnit = 10.0;
-const alfaWaterGallonsPerCounterUnit = 2.64;
+const alfaWaterGallonsPerLiter = 274.0;
+const alfaSteamNormalizedMultiplier = 1000.0;
 const boilerSafetyReferenceVersion = 'regist_inform_p99_2026_07_23_v1';
 const alfaBunkerMeterCorrectionVersion = 'alfa_bunker_direct_gal_2026_08_19_v1';
 final alfaBunkerDirectGallonsCutoverUtc = DateTime.utc(2026, 8, 19, 23);
@@ -19,11 +19,8 @@ double alfaBunkerMeterInputGallons(BoilerReading reading) {
   return reading.fuelTotal;
 }
 
-double alfaWaterGallonsFromCounter(double counterUnits) =>
-    counterUnits * alfaWaterGallonsPerCounterUnit;
-
-double alfaWaterLitersFromCounter(double counterUnits) =>
-    counterUnits * alfaWaterLitersPerCounterUnit;
+double alfaWaterGallonsFromLiters(double liters) =>
+    liters * alfaWaterGallonsPerLiter;
 
 class BoilerSafetyLimits {
   const BoilerSafetyLimits({
@@ -308,6 +305,18 @@ class BoilerReading {
               ) ??
               rawFuelTotal
         : rawFuelTotal;
+    final rawWaterInput = _toStringDynamicMap(correctedOriginalInputs['water']);
+    final rawWaterValue = _toDoubleOrNull(rawWaterInput['value']);
+    final storedWaterTotal = _toDouble(
+      json['waterValue'] ?? json['waterTotal'],
+    );
+    final correctedWaterTotal =
+        boilerId == 'alfa_laval_1200' &&
+            rawWaterValue != null &&
+            (rawWaterInput['unit'] == 'L' ||
+                rawWaterInput['unit'] == 'counter_x10_L')
+        ? alfaWaterGallonsFromLiters(rawWaterValue)
+        : storedWaterTotal;
     final storedFuelConsumption = _toDoubleOrNull(
       json['bunkerIntervalConsumption'] ?? json['fuelConsumption'],
     );
@@ -326,7 +335,7 @@ class BoilerReading {
       boilerId: boilerId,
       readingMode: json['readingMode'] as String? ?? 'cumulative_meter',
       fuelTotal: correctedFuelTotal,
-      waterTotal: _toDouble(json['waterValue'] ?? json['waterTotal']),
+      waterTotal: correctedWaterTotal,
       steamTotal: _toDoubleOrNull(json['steamValue'] ?? json['steamTotal']),
       operatorPin: json['operatorPin'] as String? ?? '',
       waterUnit:

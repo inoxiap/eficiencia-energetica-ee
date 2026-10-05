@@ -47,7 +47,7 @@ class _PreviousConsumptionStore implements ConsumptionStore {
         boilerPressurePsi: 151,
         originalInputs: const {
           'bunker': {'value': 3790, 'unit': 'L'},
-          'water': {'value': 800, 'unit': 'counter_x10_L'},
+          'water': {'value': 800, 'unit': 'L'},
         },
         fuelConsumption: null,
         waterConsumption: null,
@@ -103,7 +103,7 @@ void main() {
     expect(find.text('151'), findsOneWidget);
     expect(find.text('Consumo del intervalo'), findsNothing);
     expect(find.text('0000001000 gal'), findsOneWidget);
-    expect(find.text('0000000800 x10 L'), findsOneWidget);
+    expect(find.text('0000000800 L'), findsOneWidget);
     expect(find.text('0000003000 kg'), findsOneWidget);
 
     final boilerPicker = tester.widget<EmbeddedWheelPicker<String>>(
@@ -185,7 +185,7 @@ void main() {
 
     expect(find.textContaining('Bunker: 1.000 (gal)'), findsOneWidget);
     expect(
-      find.textContaining('Agua: 8.000,00 L = 2.112,00 gal'),
+      find.textContaining('Agua: 800,00 L = 219.200,00 gal'),
       findsOneWidget,
     );
 
@@ -194,16 +194,13 @@ void main() {
 
     expect(consumptionStore.savedReading, isNotNull);
     expect(consumptionStore.savedReading!.fuelTotal, closeTo(1000, 0.0001));
-    expect(consumptionStore.savedReading!.waterTotal, closeTo(2112, 0.0001));
+    expect(consumptionStore.savedReading!.waterTotal, closeTo(219200, 0.0001));
     expect(consumptionStore.savedReading!.steamUnit, 'kg');
     expect(
       consumptionStore.savedReading!.originalInputs['bunker']['unit'],
       'gal',
     );
-    expect(
-      consumptionStore.savedReading!.originalInputs['water']['unit'],
-      'counter_x10_L',
-    );
+    expect(consumptionStore.savedReading!.originalInputs['water']['unit'], 'L');
     expect(
       consumptionStore.savedReading!.originalInputs['steam']['unit'],
       'kg',
