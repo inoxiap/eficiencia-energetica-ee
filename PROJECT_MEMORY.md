@@ -67,8 +67,8 @@ necesitar criterio tecnico avanzado para completar un levantamiento.
 - Web/PWA:
   `https://eficiencia-energetica-ee.web.app`
 - Android vigente: release `v1.7.10`, build 21, publicado en GitHub.
-- El aviso de `app_config/mobile_app` aun anuncia Android y web `1.7.9`,
-  build 20; actualizarlo requiere autorizacion administrativa de Google Cloud.
+- `app_config/mobile_app` anuncia Android y web `1.7.10`, build 21; `forceUpdate`
+  permanece desactivado y el mensaje es informativo.
 - Firebase Hosting publica `ee_flutter/build/web`.
 - El proveedor Firebase Authentication Email/Password fue habilitado y probado
   en produccion el 2026-07-16.
@@ -1931,11 +1931,13 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
 - Despliegue: Hosting publicado en `https://eficiencia-energetica-ee.web.app`;
   release Android en
   `https://github.com/inoxiap/eficiencia-energetica-ee/releases/tag/v1.7.10`.
-- Pendiente: actualizar `app_config/mobile_app` para que los dispositivos
-  Android reciban el aviso automatico. La CLI de Firebase permite desplegar
-  Hosting, pero la sesion de gcloud no tenia una cuenta activa. Se abrio el
-  consentimiento de Google Cloud para el usuario autorizado; no se aceptaron
-  permisos en su nombre ni se modificaron documentos de Firestore.
+- Actualizacion de app: `app_config/mobile_app` actualizado en Firestore con
+  version/build 1.7.10/21 para Android y web, enlace al APK y mensajes de
+  cambio. `forceUpdate` sigue en `false`; la escritura se verifico con lectura
+  posterior del documento.
+- Verificacion en produccion: Hosting y el APK respondieron HTTP 200; el APK
+  devolvio `application/vnd.android.package-archive`. La accion de GitHub
+  `37379481071` termino con exito.
 
 ## Plantilla para futuras entradas
 
