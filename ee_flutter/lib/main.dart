@@ -20,6 +20,7 @@ import 'package:sleek_circular_slider/sleek_circular_slider.dart'
 
 import 'domain/bare_pipe.dart';
 import 'domain/boiler_consumption.dart';
+import 'domain/boiler_hourly_normalization.dart';
 import 'domain/destination_catalog.dart';
 import 'domain/leak_report.dart';
 import 'domain/maintenance_report.dart';

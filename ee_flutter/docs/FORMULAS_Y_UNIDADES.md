@@ -102,6 +102,35 @@ un intervalo que cruce la medianoche. Los deltas de bunker y agua solo se
 procesan en registros `cumulative_meter` normalizados a `gal`. El vapor se
 conserva en `kg` dentro de los datos crudos.
 
+### Vista de consumos normalizados en la app
+
+La consulta de lecturas permite alternar entre `Tomas reales` y
+`Normalizadas`. La vista real mantiene las lecturas acumuladas originales. La
+vista normalizada no escribe datos ni sustituye esas lecturas: para cada
+caldera, toma lecturas acumuladas en orden cronologico, prioriza los campos
+canonicos `gallons` y `kilograms` de `originalInputs` y usa los totales del
+modelo como respaldo. Calcula el delta valido entre cada par y lo distribuye
+uniformemente por tiempo:
+
+    porcion = delta_acumulado x minutos_solapados / minutos_transcurridos
+
+Las porciones de intervalos consecutivos se suman dentro de la hora cerrada
+`[hora_anterior, hora]`, usando timestamps y limites de hora de
+America/Guayaquil. Se muestra una hora solo cuando queda completamente cubierta
+desde la primera hasta la ultima lectura disponible; la hora mas reciente cuyo
+cierre aun no fue alcanzado no se estima. Una lectura exactamente en hora se
+trata como cualquier otro extremo de intervalo. Las revisiones con el mismo
+`rootRecordId` se reducen a la revision mas reciente para no contar dos veces
+una lectura corregida.
+
+Las cantidades se calculan con precision completa y solo se redondean al
+mostrarse. Bunker y agua se presentan en galones; vapor, cuando la caldera lo
+mide, en kilogramos. Cada medidor se procesa por separado: una muestra sin valor
+para ese medidor no corta la secuencia, y el delta se reparte entre las tomas
+validas que la rodean. Un contador que retrocede invalida el intervalo afectado;
+no se inventa un delta negativo ni se extrapola mas alla de la ultima lectura
+valida. Una hora aparece solo cuando el intervalo valido cubre la hora completa.
+
 El resumen compatible con `Regist_inform` usa provisionalmente:
 
 - Presion: promedio aritmetico de las lecturas del dia y caldera.

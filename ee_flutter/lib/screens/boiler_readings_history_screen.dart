@@ -22,6 +22,7 @@ class _BoilerReadingsHistoryScreenState
   };
   List<BoilerReading> _readings = const [];
   String _selectedBoilerId = boilerDefinitions.first.id;
+  _BoilerReadingView _view = _BoilerReadingView.real;
   bool _isLoading = true;
   String _errorMessage = '';
 
@@ -68,6 +69,16 @@ class _BoilerReadingsHistoryScreenState
       selectedReadings.length,
     );
     final visibleReadings = selectedReadings.take(visibleCount).toList();
+    final normalizedReadings = BoilerHourlyNormalizer.normalize(
+      selectedReadings,
+    );
+    final selectedCount = _view == _BoilerReadingView.real
+        ? selectedReadings.length
+        : normalizedReadings.length;
+    final visibleItemsCount = math.min(
+      _visibleByBoiler[_selectedBoilerId] ?? _pageSize,
+      selectedCount,
+    );
 
     return AppShell(
       bottomNavigationBar: NavigationBar(
@@ -113,14 +124,20 @@ class _BoilerReadingsHistoryScreenState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Lecturas acumuladas',
+                          _view == _BoilerReadingView.real
+                              ? 'Lecturas acumuladas'
+                              : 'Consumo por hora',
                           style: Theme.of(context).textTheme.titleMediumBold,
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          selectedReadings.isEmpty
-                              ? 'Sin registros para esta caldera.'
-                              : 'Mostrando $visibleCount de ${selectedReadings.length}.',
+                          _view == _BoilerReadingView.real
+                              ? selectedReadings.isEmpty
+                                    ? 'Sin registros para esta caldera.'
+                                    : 'Mostrando $visibleCount de ${selectedReadings.length}.'
+                              : normalizedReadings.isEmpty
+                              ? 'Sin horas completas disponibles.'
+                              : 'Mostrando $visibleItemsCount de $selectedCount horas; reparto uniforme.',
                           style: Theme.of(
                             context,
                           ).textTheme.bodySmall?.copyWith(color: mutedColor),
@@ -135,15 +152,45 @@ class _BoilerReadingsHistoryScreenState
                   ),
                 ],
               ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<_BoilerReadingView>(
+                  key: const Key('boiler-reading-view-toggle'),
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: _BoilerReadingView.real,
+                      label: Text('Tomas reales'),
+                    ),
+                    ButtonSegment(
+                      value: _BoilerReadingView.normalized,
+                      label: Text('Normalizadas'),
+                    ),
+                  ],
+                  selected: {_view},
+                  onSelectionChanged: (selection) => setState(() {
+                    _view = selection.first;
+                  }),
+                ),
+              ),
               const SizedBox(height: 12),
-              if (visibleReadings.isEmpty)
-                const EmptyState(
-                  text:
-                      'Las lecturas apareceran aqui despues de ser confirmadas en la nube.',
+              if (selectedCount == 0)
+                EmptyState(
+                  text: _view == _BoilerReadingView.real
+                      ? 'Las lecturas apareceran aqui despues de ser confirmadas en la nube.'
+                      : 'No hay horas completas entre lecturas para mostrar.',
                 )
               else ...[
-                _ReadingsList(readings: visibleReadings),
-                if (visibleCount < selectedReadings.length) ...[
+                if (_view == _BoilerReadingView.real)
+                  _ReadingsList(readings: visibleReadings)
+                else
+                  _NormalizedReadingsList(
+                    readings: normalizedReadings
+                        .take(visibleItemsCount)
+                        .toList(),
+                  ),
+                if (visibleItemsCount < selectedCount) ...[
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
@@ -187,6 +234,8 @@ class _BoilerReadingsHistoryScreenState
   }
 }
 
+enum _BoilerReadingView { real, normalized }
+
 class _ReadingsList extends StatelessWidget {
   const _ReadingsList({required this.readings});
 
@@ -204,6 +253,105 @@ class _ReadingsList extends StatelessWidget {
         key: Key('boiler-reading-row-$index'),
         reading: readings[index],
         index: index,
+      ),
+    );
+  }
+}
+
+class _NormalizedReadingsList extends StatelessWidget {
+  const _NormalizedReadingsList({required this.readings});
+
+  final List<NormalizedBoilerHour> readings;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      key: const Key('normalized-boiler-readings-list'),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: readings.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (context, index) =>
+          _NormalizedReadingRow(reading: readings[index], index: index),
+    );
+  }
+}
+
+class _NormalizedReadingRow extends StatelessWidget {
+  const _NormalizedReadingRow({required this.reading, required this.index});
+
+  final NormalizedBoilerHour reading;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final local = reading.hourEnd.toLocal();
+    String time(DateTime value) =>
+        '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+    String date(DateTime value) =>
+        '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+    _ReadingValue metric(double? value, String unit) => value == null
+        ? const _ReadingValue('-', '')
+        : _ReadingValue(Formats.noDecimal(value), unit);
+
+    return Padding(
+      key: Key('normalized-boiler-reading-row-$index'),
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.schedule, size: 18, color: brandRed),
+              const SizedBox(width: 7),
+              Text(
+                date(local),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const Spacer(),
+              Text(
+                time(local),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: mutedColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _ReadingMetric(
+                    key: Key('normalized-bunker-$index'),
+                    label: 'Bunker',
+                    readingValue: metric(reading.bunkerGallons, 'gal'),
+                  ),
+                ),
+                const VerticalDivider(width: 12),
+                Expanded(
+                  child: _ReadingMetric(
+                    key: Key('normalized-water-$index'),
+                    label: 'Agua',
+                    readingValue: metric(reading.waterGallons, 'gal'),
+                  ),
+                ),
+                const VerticalDivider(width: 12),
+                Expanded(
+                  child: _ReadingMetric(
+                    key: Key('normalized-steam-$index'),
+                    label: 'Vapor',
+                    readingValue: metric(reading.steamKg, 'kg'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

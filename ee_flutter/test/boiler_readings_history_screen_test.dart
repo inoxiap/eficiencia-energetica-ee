@@ -61,6 +61,33 @@ class _HistoryConsumptionStore implements ConsumptionStore {
   Future<void> saveReading(BoilerReading reading) async {}
 }
 
+class _NormalizedHistoryStore implements ConsumptionStore {
+  @override
+  Future<List<BoilerReading>> loadReadings() async => [
+    for (final reading in [
+      (DateTime.utc(2026, 7, 28, 14), 100.0, 100.0, 100.0),
+      (DateTime.utc(2026, 7, 28, 15), 110.0, 120.0, 150.0),
+      (DateTime.utc(2026, 7, 28, 16, 20), 130.0, 160.0, 190.0),
+    ])
+      BoilerReading(
+        id: reading.$1.toIso8601String(),
+        recordedAt: reading.$1,
+        createdAt: reading.$1,
+        boilerName: alfaLavalBoiler,
+        boilerId: 'alfa_laval_1200',
+        fuelTotal: reading.$2,
+        waterTotal: reading.$3,
+        steamTotal: reading.$4,
+        fuelConsumption: null,
+        waterConsumption: null,
+        steamConsumption: null,
+      ),
+  ];
+
+  @override
+  Future<void> saveReading(BoilerReading reading) async {}
+}
+
 void main() {
   testWidgets('history separates boilers and loads readings 15 at a time', (
     tester,
@@ -102,5 +129,37 @@ void main() {
     expect(find.text('Mostrando 18 de 18.'), findsOneWidget);
     expect(find.text('5.017'), findsOneWidget);
     expect(find.byKey(const Key('load-more-boiler-readings')), findsNothing);
+  });
+
+  testWidgets('normalized view displays hourly deltas with canonical units', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BoilerReadingsHistoryScreen(
+          consumptionStore: _NormalizedHistoryStore(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Normalizadas'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Consumo por hora'), findsOneWidget);
+    expect(
+      find.byKey(const Key('normalized-boiler-readings-list')),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(find.byKey(const Key('normalized-bunker-0')));
+    expect(find.text('15'), findsOneWidget);
+    expect(find.text('30'), findsNWidgets(2));
+    expect(find.text('50'), findsOneWidget);
+    expect(find.text('gal'), findsWidgets);
+    expect(find.text('kg'), findsWidgets);
+    expect(find.text('12:00'), findsNothing);
   });
 }

@@ -1757,6 +1757,98 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   este cambio; Hosting y APK verificados con HTTP 200.
 - Despliegue: completado. No se modificaron reglas ni datos funcionales.
 
+### 2026-10-05 - Vista de consumos horarios normalizados
+
+- Solicitud: agregar en el historial de cada caldera un conmutador entre tomas
+  reales y deltas por hora cerrada, distribuyendo uniformemente el consumo
+  entre lecturas acumuladas.
+- Resultado: se agrego `Tomas reales / Normalizadas` junto al encabezado del
+  historial. La segunda vista reparte cada delta por minutos de solapamiento,
+  suma intervalos dentro de cada hora de America/Guayaquil y solo muestra horas
+  completas desde la primera lectura hasta el ultimo cierre disponible. Las
+  revisiones se deduplican por `rootRecordId`; los retrocesos de medidor quedan
+  como valor no disponible y no alteran Firestore.
+- Unidades: bunker y agua se muestran en galones, vapor en kg. Se conserva la
+  precision durante el calculo y se redondea solo en la interfaz. El historico
+  real sigue intacto.
+- Aclaracion: 9:12 a 11:34 son 142 minutos, no 144. La normalizacion utiliza el
+  tiempo real de los timestamps; no se fuerza el ejemplo a 144 minutos.
+- Archivos: `ee_flutter/lib/domain/boiler_hourly_normalization.dart`,
+  `ee_flutter/lib/screens/boiler_readings_history_screen.dart`,
+  `ee_flutter/test/boiler_hourly_normalization_test.dart`,
+  `ee_flutter/test/boiler_readings_history_screen_test.dart` y
+  `ee_flutter/docs/FORMULAS_Y_UNIDADES.md`.
+- Pruebas/builds: `flutter analyze --no-pub --no-fatal-infos` aprobado;
+  `flutter test --no-pub` con 63 pruebas aprobadas; `flutter build web
+  --release` y `flutter build apk --debug` aprobados. La prueba de interfaz
+  normalizada usa viewport de telefono 390x844.
+- Despliegue: ninguno. No se publico Hosting/APK ni se escribio en Firebase.
+  El intento de abrir Android tras compilar quedo sin sesion autenticada y no
+  permitio comprobar la vista con datos remotos; no se ingresaron credenciales.
+- Pendiente: si Jeff aprueba la experiencia, preparar publicacion web/APK y
+  validar la vista en el emulador con una sesion autorizada.
+
+### 2026-10-05 - Horas ausentes en consumos normalizados
+
+- Solicitud: revisar por que las horas 11:00, 12:00 y 13:00 de Alfa Laval
+  aparecian con guiones entre horas que si mostraban valores.
+- Hallazgo: la vista de lecturas reales presenta el valor original de
+  `originalInputs`, mientras que la normalizacion usaba siempre `fuelTotal`,
+  `waterTotal` y `steamTotal`. Esas representaciones pueden divergir en datos
+  historicos o con conversiones. Ademas, una muestra intermedia sin valor para
+  un medidor cortaba la interpolacion aunque hubiera lecturas validas antes y
+  despues.
+- Cambio: cada medidor ahora enlaza sus propias muestras no nulas antes de
+  repartir por solapamiento horario y prioriza los campos canonicos `gallons` /
+  `kilograms` de `originalInputs`, con respaldo en los totales historicos. El
+  recorrido ahora visita solo las horas que cruza cada intervalo, evitando
+  recorrer todo el historial horario por cada par de lecturas. Se mantienen la
+  cobertura completa y la proteccion ante reinicios. Se agregaron
+  pruebas para muestras intermedias ausentes, representaciones canonicas y el
+  conjunto visible del 05-10-2026 (08:06, 10:02, 11:02, 12:01 y 14:05), que da
+  las cinco horas cerradas si los contadores son monotonicamente crecientes.
+- Archivos: `ee_flutter/lib/domain/boiler_hourly_normalization.dart`,
+  `ee_flutter/test/boiler_hourly_normalization_test.dart` y
+  `ee_flutter/docs/FORMULAS_Y_UNIDADES.md`.
+- Verificacion: pruebas Flutter completas aprobadas (66); `flutter analyze
+  --no-pub --no-fatal-infos` aprobado; APK debug compilado e instalado en
+  `emulator-5554`. Tras la instalacion el emulador quedo en carga y reporto no
+  tener conectividad de red, por lo que no se pudo confirmar la lectura remota
+  en pantalla. No se ingresaron credenciales ni se escribieron datos.
+- Despliegue: ninguno. No se modifico Firestore ni se publico web/APK.
+- Pendiente: el emulador con la APK recompilada mostro bloqueo/carga al reabrir;
+  no se pudo confirmar la pantalla corregida con los registros remotos ni
+  consultar administrativamente los campos de revision de Firestore. Antes de
+  publicar, repetir la verificacion visual y comparar los totales canonicos
+  por registro.
+
+### 2026-10-05 - Seguimiento del modo normalizado en Alfa Laval
+
+- Solicitud: revisar por que siguen apareciendo guiones y valores que no
+  parecen deltas en las horas 11:00, 12:00 y 13:00.
+- Verificacion visual: se reprodujo la pantalla en el Pixel 8. Tomas reales
+  muestra para el 05-10-2026 lecturas 08:06, 10:02, 11:02, 12:01 y 14:05;
+  pero Normalizadas muestra 264/45/13 a las 14:00, guiones en 11:00-13:00 y
+  253/42/12 a las 10:00. Esos valores no son los deltas que resultan de las
+  lecturas reales mostradas.
+- Firestore: la consola autenticada en modo lectura no encontro el documento
+  esperado `alfa_laval_1200_2026100514`; la lista visible de documentos incluia
+  registros historicos hasta julio. Esto sugiere que la serie de octubre puede
+  estar en almacenamiento local/pendiente o usar otra nomenclatura; no se
+  escribio ni modifico dato alguno.
+- Prueba: se reforzo el caso de las cinco lecturas de octubre para verificar
+  los deltas horarios numericos y no solo su presencia. `flutter test
+  --no-pub test/boiler_hourly_normalization_test.dart` aprobado y
+  `flutter analyze --no-pub --no-fatal-infos` sin hallazgos.
+- Emulador: se instalo APK debug para diagnostico; al reiniciar, el renderizador
+  Impeller/GLES del AVD fallo al compilar shaders y dejo la pantalla en blanco.
+  No se pudo extraer telemetria de widgets; la sesion anterior se habia visto
+  en pantalla antes de reinstalar.
+- Despliegue: ninguno. No se publicaron cambios ni se alteraron datos en
+  produccion. Pendiente: comparar los IDs y valores canonicos de los documentos
+  reales del 05-10 en Firestore con la serie local, y verificar que el modo
+  normalizado instalado use la misma compilacion que el codigo probado.
+
 ## Plantilla para futuras entradas
 
 ```markdown
