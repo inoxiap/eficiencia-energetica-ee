@@ -16,7 +16,7 @@ o descubrir informacion relevante. No guardar secretos ni credenciales aqui.
   `https://github.com/inoxiap/eficiencia-energetica-ee.git`
 - Rama principal: `main`.
 - Aplicacion activa: `ee_flutter/`.
-- Version Flutter web y Android publicada: `1.7.8+19`.
+- Version Flutter web y Android publicada: `1.7.9+20`.
 - La raiz contiene una app Android nativa y una PWA antiguas. Son respaldo
   historico; no usarlas para implementar funciones nuevas sin solicitud expresa.
 
@@ -66,8 +66,8 @@ necesitar criterio tecnico avanzado para completar un levantamiento.
 - Plan Firebase: Spark.
 - Web/PWA:
   `https://eficiencia-energetica-ee.web.app`
-- Android vigente: release `v1.7.8`, build 19, publicado en GitHub.
-- `app_config/mobile_app` anuncia Android `1.7.8`, build 19.
+- Android vigente: release `v1.7.9`, build 20, publicado en GitHub.
+- `app_config/mobile_app` anuncia Android y web `1.7.9`, build 20.
 - Firebase Hosting publica `ee_flutter/build/web`.
 - El proveedor Firebase Authentication Email/Password fue habilitado y probado
   en produccion el 2026-07-16.
@@ -1848,6 +1848,22 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   produccion. Pendiente: comparar los IDs y valores canonicos de los documentos
   reales del 05-10 en Firestore con la serie local, y verificar que el modo
   normalizado instalado use la misma compilacion que el codigo probado.
+
+### 2026-10-05 - Publicacion de lecturas normalizadas 1.7.9
+
+- Solicitud: hacer visible en produccion la correccion de los deltas horarios,
+  actualizar Flutter Web y publicar Android con aviso de nueva version.
+- Resultado: Hosting actualizado; APK release `v1.7.9` build 20 publicado en
+  GitHub. Firestore `app_config/mobile_app` ahora anuncia Android y web
+  `1.7.9` / build 20, con el enlace del APK nuevo y mensaje del cambio.
+- Versionamiento: `ee_flutter/pubspec.yaml` en `1.7.9+20`; commit `ac7aa21`
+  publicado en `main`, tag y release `v1.7.9`.
+- Verificacion: 66 pruebas Flutter, `flutter analyze`, build web release y APK
+  release aprobados. Hosting y APK respondieron HTTP 200. `forceUpdate` sigue
+  en `false`: el aviso no bloquea el uso de versiones anteriores.
+- Limite de validacion: el emulador Pixel 8 tuvo pantalla vacia por errores
+  Impeller/GLES tras reinstalar debug; no se confirma un recorrido visual
+  posterior al despliegue. No se modificaron registros de consumo.
 
 ## Plantilla para futuras entradas
 
