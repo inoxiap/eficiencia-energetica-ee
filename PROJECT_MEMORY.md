@@ -1993,6 +1993,20 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   de publicacion termino exitosamente.
 - Commit: `bd95db1` en `main`; release Android `v1.7.11`.
 
+### 2026-10-06 - Analisis de presiones Cleaver para alarmas
+
+- Hallazgo productivo: se revisaron 602 lecturas historicas de
+  `cleaver_brooks_1200`. Hay 415 lecturas entre 100 y 123 PSI, 161 entre 150
+  y 161 PSI y 26 con 0 PSI.
+- Recomendacion: clasificar 100-123 PSI como baja presion y 150-161 PSI como
+  alta presion; tratar 0 PSI como dato invalido/no clasificable, no como baja.
+- Umbrales propuestos para bunker normalizado: 190 gal/h en baja presion y
+  300 gal/h en alta presion. Alfa Laval queda en 300 gal/h y Distral en
+  190 gal/h, segun la solicitud del usuario.
+- Alarmas solicitadas: notificar a Jeff y al usuario administrador, una alerta
+  por cada hora que supere el limite. Aun no se implementaron notificaciones;
+  falta confirmar la frontera operativa y registrar tokens/permisos de FCM.
+
 ## Plantilla para futuras entradas
 
 ```markdown
