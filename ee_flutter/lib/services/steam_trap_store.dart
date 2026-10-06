@@ -66,7 +66,7 @@ class FirebaseSteamTrapStore implements SteamTrapStore {
     required Future<FirebaseApp> firebaseReady,
     required OperatorSession operatorSession,
     FirebaseFirestore? firestore,
-    this.timeout = const Duration(seconds: 25),
+    this.timeout = const Duration(seconds: 45),
   }) : _firebaseReady = firebaseReady,
        _operatorSession = operatorSession,
        _firestore = firestore;

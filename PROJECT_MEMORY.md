@@ -1,6 +1,6 @@
 # Memoria del proyecto: Eficiencia Energetica EE
 
-Ultima actualizacion: 2026-10-05
+Ultima actualizacion: 2026-10-06
 
 Este documento es la memoria operativa persistente del proyecto. Debe leerse
 completo al iniciar o retomar cualquier tarea y actualizarse al terminar cambios
@@ -293,6 +293,99 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   descartarlo sin instruccion expresa de Jeff.
 
 ## Bitacora
+
+### 2026-10-06 - Historico de consumos limitado a 250 registros
+
+- Hallazgo productivo: `boiler_consumption_readings` conserva 1.704 lecturas,
+  desde el 24-07-2026 hasta el 06-10-2026: Alfa 661, Cleaver 603 y Distral
+  440. No se encontraron indicios de perdida de esos documentos en Firestore.
+- Causa: `FirestoreConsumptionStore` usaba `.limit(250)`, por lo que la
+  pantalla solo recibia el tramo mas reciente y parecia que faltaban los datos
+  anteriores a finales de septiembre.
+- Correccion local: la consulta ahora pagina bloques de 250 con
+  `startAfterDocument` hasta completar el historial disponible, sin reescribir
+  ni borrar registros. Archivo: `ee_flutter/lib/services/firestore_consumption_store.dart`.
+- Verificacion: `flutter analyze --no-pub` sin hallazgos y `flutter test
+  --no-pub --concurrency=1` aprobado con 70 pruebas. No se desplego ni se
+  modifico Firestore en esta tarea.
+- Pendiente: publicar Web/APK despues de la aprobacion de Jeff. La consulta
+  completa implica leer mas documentos que antes; se conserva la paginacion de
+  red para evitar una respuesta unica grande.
+- Prueba en emulador: se compilo `flutter build apk --release`, se reinicio el
+  AVD `EE_Pixel_8_API_35_x64` con datos locales limpios por falta de espacio,
+  se instalo el APK y se abrio correctamente como `1.7.11` build `22`. No se
+  altero produccion.
+
+### 2026-10-06 - Paginacion bajo demanda del historico de consumos
+
+- Optimizacion: la pantalla carga inicialmente 100 lecturas remotas. `Cargar
+  15 mas` primero muestra registros ya consultados; al agotarlos aparece
+  `Consultar mas datos` y solicita la pagina siguiente a Firestore.
+- Se agregaron `ConsumptionPage` y `PagedConsumptionStore`, con delegacion en
+  el store hibrido y diferido. `loadReadings()` completo se conserva para
+  procesos que requieren el historial total, como normalizacion y alertas.
+- Verificacion: `flutter analyze --no-pub` sin hallazgos y bateria Flutter
+  completa aprobada con 70 pruebas. No se publico ni se modifico Firestore.
+- La revision local de alertas tambien se ajusto para usar la primera pagina
+  reciente cuando el store admite paginacion; ya no fuerza una descarga total
+  al iniciar o reanudar la app.
+
+### 2026-10-06 - Timeout al guardar levantamientos de trampas
+
+- Incidente: un proveedor recibio `TimeoutException after 0:00:25` al enviar un
+  levantamiento desde navegador movil. El limite de `FirebaseSteamTrapStore`
+  era 25 segundos y cubria inicializacion, reserva transaccional del TAG,
+  guardado y confirmacion; no correspondia a nomenclatura.
+- Correccion local: el limite subio a 45 segundos; el ID del borrador se fija
+  antes de la reserva para que un reintento despues de un timeout reutilice la
+  misma transaccion y no cree otro TAG. El formulario conserva fotos y datos y
+  muestra un mensaje claro de reintento.
+- Archivos: `ee_flutter/lib/services/steam_trap_store.dart` y
+  `ee_flutter/lib/screens/steam_trap_module_screen.dart`.
+- Verificacion: `flutter analyze --no-pub` sin hallazgos y pruebas del modulo
+  de trampas aprobadas (3). No se publico ni se modificaron documentos.
+
+### 2026-10-06 - Presion, usuario y alertas locales en registros de calderas
+
+- Solicitud: mostrar la presion de caldera y el usuario debajo de cada fecha en
+  tomas reales y horas normalizadas; mostrar PSI en una marca vertical gris al
+  lado derecho; dejar el acceso a Casa como solo icono; y evaluar alertas sin
+  depender de Blaze.
+- Resultado: `NormalizedBoilerHour` ahora conserva la presion PSI y el ultimo
+  usuario de la muestra que contribuye a cada hora. La pantalla de historicos
+  muestra ambos datos en tomas reales y normalizadas, mantiene unidades y
+  calculos existentes, y la navegacion inferior deja Casa sin texto.
+- Alertas: se agrego `LocalConsumptionAlertService` con
+  `flutter_local_notifications`. Revisa consumos normalizados al iniciar y al
+  regresar de segundo plano, aplica los umbrales Alfa 300, Distral 190 y
+  Cleaver 190/300 segun bandas 100-123/150-161 PSI, y evita duplicados locales.
+  Es una alerta de mejor esfuerzo: Android puede suspender procesos en segundo
+  plano; no reemplaza un backend push garantizado.
+- Archivos: `ee_flutter/lib/screens/boiler_readings_history_screen.dart`,
+  `ee_flutter/lib/domain/boiler_hourly_normalization.dart`,
+  `ee_flutter/lib/services/local_consumption_alert_service.dart`,
+  `ee_flutter/lib/main.dart`, `ee_flutter/pubspec.yaml` y lock, mas prueba de
+  normalizacion.
+- Verificacion: `flutter analyze --no-pub` aprobado; pruebas focalizadas del
+  historial y normalizacion aprobadas (13); bateria Flutter completa aprobada
+  (69). `flutter build web --release` genero `build/web`; `flutter build apk
+  --debug` quedo ejecutando Gradle sin salida final confirmada en esta sesion.
+- Pendiente: no se publico Hosting ni APK en esta tarea. La version productiva
+  sigue igual hasta validar visualmente y decidir el despliegue.
+- Validacion adicional: se activo desugaring de librerias Java en
+  `ee_flutter/android/app/build.gradle.kts`, requerido por
+  `flutter_local_notifications`. `flutter build apk --debug` y
+  `flutter build apk --release` terminaron correctamente; el release local
+  genero `build/app/outputs/flutter-apk/app-release.apk` de 57.4 MB.
+  El APK release se instalo y abrio en `EE_Pixel_8_API_35_x64` como version
+  `1.7.11` build `22`. La instalacion inicial debug no entro por espacio del
+  emulador, por lo que se uso el release mas pequeno; no se tocaron datos de
+  produccion.
+- Ajuste posterior solicitado: Casa se movio al extremo izquierdo de la tira
+  de registros, antes de Alfa, Distral y Cleaver; se actualizaron los indices
+  de navegacion. Se recompilo el APK release, se libero cache del emulador por
+  falta de espacio, se reinstalo y se abrio correctamente en el Pixel 8.
+  Prueba focalizada de historicos: 2 pruebas aprobadas.
 
 ### 2026-09-24 - Camara o galeria en el levantamiento de trampas
 
@@ -2025,6 +2118,21 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   porque el proyecto esta en Spark y necesita Blaze para habilitar Cloud
   Functions/Artifact Registry. No se activo facturacion ni se publico la
   alerta en produccion.
+
+### 2026-10-06 - Publicacion de correccion de timeout 1.7.12
+
+- Solicitud: publicar el ajuste para que proveedores puedan guardar
+  levantamientos de trampas aunque Firebase tarde mas de 25 segundos.
+- Resultado local: timeout ampliado a 45 segundos, reintento con el mismo ID de
+  registro y mensaje en espanol que conserva el formulario ante demora.
+- Version: `ee_flutter/pubspec.yaml` queda en `1.7.12+23`.
+- Pruebas/builds: `flutter analyze --no-pub` aprobado; bateria completa Flutter
+  aprobada con 70 pruebas; `flutter build web --release` y
+  `flutter build apk --release` aprobados. APK generado en
+  `ee_flutter/build/app/outputs/flutter-apk/app-release.apk`.
+- Despliegue web: Firebase Hosting publicado en
+  `https://eficiencia-energetica-ee.web.app`. El APK y el aviso de version
+  quedan pendientes de publicar en GitHub y actualizar en `app_config`.
 
 ## Plantilla para futuras entradas
 

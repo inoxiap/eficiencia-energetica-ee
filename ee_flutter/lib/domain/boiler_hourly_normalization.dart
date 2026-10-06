@@ -6,6 +6,8 @@ class NormalizedBoilerHour {
     required this.bunkerGallons,
     required this.waterGallons,
     required this.steamKg,
+    required this.boilerPressurePsi,
+    required this.operatorName,
   });
 
   /// UTC instant marking the end of this complete Guayaquil hour.
@@ -13,6 +15,8 @@ class NormalizedBoilerHour {
   final double? bunkerGallons;
   final double? waterGallons;
   final double? steamKg;
+  final double? boilerPressurePsi;
+  final String operatorName;
 }
 
 class BoilerHourlyNormalizer {
@@ -94,6 +98,7 @@ class BoilerHourlyNormalizer {
                 current.value,
                 overlapMs,
                 intervalMs,
+                currentReading: current.reading,
               );
             }
           }
@@ -157,15 +162,22 @@ class _HourAccumulator {
   final DateTime hourEnd;
   final Map<_Metric, double> _values = {};
   final Map<_Metric, int> _coverageMs = {};
+  BoilerReading? _referenceReading;
 
   void add(
     _Metric metric,
     double? previous,
     double? current,
     int overlapMs,
-    int intervalMs,
-  ) {
+    int intervalMs, {
+    required BoilerReading currentReading,
+  }) {
     if (previous == null || current == null || current < previous) return;
+    _referenceReading =
+        _referenceReading == null ||
+            currentReading.recordedAt.isAfter(_referenceReading!.recordedAt)
+        ? currentReading
+        : _referenceReading;
     _values[metric] =
         (_values[metric] ?? 0) + (current - previous) * overlapMs / intervalMs;
     _coverageMs[metric] = (_coverageMs[metric] ?? 0) + overlapMs;
@@ -187,5 +199,7 @@ class _HourAccumulator {
     steamKg: _hourlyEstimate(_Metric.steam) == null
         ? null
         : _hourlyEstimate(_Metric.steam)! * alfaSteamNormalizedMultiplier,
+    boilerPressurePsi: _referenceReading?.boilerPressurePsi,
+    operatorName: _referenceReading?.createdByNameSnapshot ?? '',
   );
 }

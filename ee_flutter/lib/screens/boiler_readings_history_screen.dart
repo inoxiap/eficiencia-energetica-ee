@@ -16,6 +16,7 @@ class BoilerReadingsHistoryScreen extends StatefulWidget {
 class _BoilerReadingsHistoryScreenState
     extends State<BoilerReadingsHistoryScreen> {
   static const _pageSize = 15;
+  static const _cloudPageSize = 100;
 
   final _visibleByBoiler = <String, int>{
     for (final boiler in boilerDefinitions) boiler.id: _pageSize,
@@ -24,6 +25,8 @@ class _BoilerReadingsHistoryScreenState
   String _selectedBoilerId = boilerDefinitions.first.id;
   _BoilerReadingView _view = _BoilerReadingView.real;
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _cloudHasMore = false;
   String _errorMessage = '';
 
   @override
@@ -38,7 +41,16 @@ class _BoilerReadingsHistoryScreenState
       _errorMessage = '';
     });
     try {
-      final readings = await widget.consumptionStore.loadReadings();
+      final pageStore = widget.consumptionStore is PagedConsumptionStore
+          ? widget.consumptionStore as PagedConsumptionStore
+          : null;
+      final page = pageStore != null
+          ? await pageStore.loadFirstPage(limit: _cloudPageSize)
+          : ConsumptionPage(
+              readings: await widget.consumptionStore.loadReadings(),
+              hasMore: false,
+            );
+      final readings = page.readings;
       readings.sort((left, right) {
         final byDate = right.recordedAt.compareTo(left.recordedAt);
         return byDate != 0 ? byDate : right.revision.compareTo(left.revision);
@@ -46,6 +58,7 @@ class _BoilerReadingsHistoryScreenState
       if (!mounted) return;
       setState(() {
         _readings = readings;
+        _cloudHasMore = page.hasMore;
         _isLoading = false;
       });
     } catch (_) {
@@ -86,6 +99,11 @@ class _BoilerReadingsHistoryScreenState
         onDestinationSelected: _selectDestination,
         destinations: const [
           NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: '',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.local_fire_department_outlined),
             selectedIcon: Icon(Icons.local_fire_department),
             label: 'Alfa',
@@ -94,11 +112,6 @@ class _BoilerReadingsHistoryScreenState
             icon: Icon(Icons.local_fire_department_outlined),
             selectedIcon: Icon(Icons.local_fire_department),
             label: 'Distral',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Casa',
           ),
           NavigationDestination(
             icon: Icon(Icons.local_fire_department_outlined),
@@ -196,9 +209,29 @@ class _BoilerReadingsHistoryScreenState
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       key: const Key('load-more-boiler-readings'),
-                      onPressed: _loadMore,
+                      onPressed: _isLoadingMore ? null : _loadMore,
                       icon: const Icon(Icons.expand_more),
-                      label: const Text('Cargar 15 mas'),
+                      label: Text(
+                        _isLoadingMore
+                            ? 'Consultando registros...'
+                            : 'Cargar 15 mas',
+                      ),
+                    ),
+                  ),
+                ],
+                if (visibleItemsCount >= selectedCount && _cloudHasMore) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      key: const Key('load-more-boiler-cloud-page'),
+                      onPressed: _isLoadingMore ? null : _loadMore,
+                      icon: const Icon(Icons.cloud_download_outlined),
+                      label: Text(
+                        _isLoadingMore
+                            ? 'Consultando registros...'
+                            : 'Consultar mas datos',
+                      ),
                     ),
                   ),
                 ],
@@ -213,24 +246,61 @@ class _BoilerReadingsHistoryScreenState
     final boilerIndex = boilerDefinitions.indexWhere(
       (boiler) => boiler.id == _selectedBoilerId,
     );
-    return boilerIndex < 2 ? boilerIndex : 3;
+    return boilerIndex + 1;
   }
 
   void _selectDestination(int index) {
     FocusScope.of(context).unfocus();
-    if (index == 2) {
+    if (index == 0) {
       returnToHome(context);
       return;
     }
-    final boilerIndex = index < 2 ? index : 2;
+    final boilerIndex = index - 1;
     setState(() => _selectedBoilerId = boilerDefinitions[boilerIndex].id);
   }
 
-  void _loadMore() {
-    setState(() {
-      _visibleByBoiler[_selectedBoilerId] =
-          (_visibleByBoiler[_selectedBoilerId] ?? _pageSize) + _pageSize;
-    });
+  Future<void> _loadMore() async {
+    final selectedReadings = _readings
+        .where((reading) => reading.effectiveBoilerId == _selectedBoilerId)
+        .toList();
+    final availableCount = _view == _BoilerReadingView.real
+        ? selectedReadings.length
+        : BoilerHourlyNormalizer.normalize(selectedReadings).length;
+    final visibleCount = _visibleByBoiler[_selectedBoilerId] ?? _pageSize;
+    if (visibleCount < availableCount) {
+      setState(() {
+        _visibleByBoiler[_selectedBoilerId] = visibleCount + _pageSize;
+      });
+      return;
+    }
+    final pageStore = widget.consumptionStore is PagedConsumptionStore
+        ? widget.consumptionStore as PagedConsumptionStore
+        : null;
+    if (pageStore == null || !_cloudHasMore) return;
+    setState(() => _isLoadingMore = true);
+    try {
+      final page = await pageStore.loadNextPage(limit: _cloudPageSize);
+      if (!mounted) return;
+      final byId = <String, BoilerReading>{
+        for (final reading in _readings) reading.id: reading,
+      };
+      for (final reading in page.readings) {
+        byId[reading.id] = reading;
+      }
+      final readings = byId.values.toList()
+        ..sort((left, right) {
+          final byDate = right.recordedAt.compareTo(left.recordedAt);
+          return byDate != 0 ? byDate : right.revision.compareTo(left.revision);
+        });
+      setState(() {
+        _readings = readings;
+        _cloudHasMore = page.hasMore;
+        _isLoadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingMore = false);
+    }
   }
 }
 
@@ -320,36 +390,35 @@ class _NormalizedReadingRow extends StatelessWidget {
               ),
             ],
           ),
+          _OperatorCaption(name: reading.operatorName),
           const SizedBox(height: 12),
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: _ReadingMetric(
-                    key: Key('normalized-bunker-$index'),
-                    label: 'Bunker',
-                    readingValue: metric(reading.bunkerGallons, 'gal'),
-                  ),
+          _ReadingMetricsWithPressure(
+            pressurePsi: reading.boilerPressurePsi,
+            children: [
+              Expanded(
+                child: _ReadingMetric(
+                  key: Key('normalized-bunker-$index'),
+                  label: 'Bunker',
+                  readingValue: metric(reading.bunkerGallons, 'gal'),
                 ),
-                const VerticalDivider(width: 12),
-                Expanded(
-                  child: _ReadingMetric(
-                    key: Key('normalized-water-$index'),
-                    label: 'Agua',
-                    readingValue: metric(reading.waterGallons, 'gal'),
-                  ),
+              ),
+              const VerticalDivider(width: 12),
+              Expanded(
+                child: _ReadingMetric(
+                  key: Key('normalized-water-$index'),
+                  label: 'Agua',
+                  readingValue: metric(reading.waterGallons, 'gal'),
                 ),
-                const VerticalDivider(width: 12),
-                Expanded(
-                  child: _ReadingMetric(
-                    key: Key('normalized-steam-$index'),
-                    label: 'Vapor',
-                    readingValue: metric(reading.steamKg, 'kg'),
-                  ),
+              ),
+              const VerticalDivider(width: 12),
+              Expanded(
+                child: _ReadingMetric(
+                  key: Key('normalized-steam-$index'),
+                  label: 'Vapor',
+                  readingValue: metric(reading.steamKg, 'kg'),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -397,36 +466,35 @@ class _ReadingRow extends StatelessWidget {
               ),
             ],
           ),
+          _OperatorCaption(name: reading.createdByNameSnapshot),
           const SizedBox(height: 12),
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: _ReadingMetric(
-                    key: Key('boiler-reading-value-bunker-$index'),
-                    label: 'Bunker',
-                    readingValue: bunker,
-                  ),
+          _ReadingMetricsWithPressure(
+            pressurePsi: reading.boilerPressurePsi,
+            children: [
+              Expanded(
+                child: _ReadingMetric(
+                  key: Key('boiler-reading-value-bunker-$index'),
+                  label: 'Bunker',
+                  readingValue: bunker,
                 ),
-                const VerticalDivider(width: 12),
-                Expanded(
-                  child: _ReadingMetric(
-                    key: Key('boiler-reading-value-water-$index'),
-                    label: 'Agua',
-                    readingValue: water,
-                  ),
+              ),
+              const VerticalDivider(width: 12),
+              Expanded(
+                child: _ReadingMetric(
+                  key: Key('boiler-reading-value-water-$index'),
+                  label: 'Agua',
+                  readingValue: water,
                 ),
-                const VerticalDivider(width: 12),
-                Expanded(
-                  child: _ReadingMetric(
-                    key: Key('boiler-reading-value-steam-$index'),
-                    label: 'Vapor',
-                    readingValue: steam,
-                  ),
+              ),
+              const VerticalDivider(width: 12),
+              Expanded(
+                child: _ReadingMetric(
+                  key: Key('boiler-reading-value-steam-$index'),
+                  label: 'Vapor',
+                  readingValue: steam,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -491,6 +559,64 @@ class _ReadingRow extends StatelessWidget {
       '' => 's/u',
       _ => unit,
     };
+  }
+}
+
+class _OperatorCaption extends StatelessWidget {
+  const _OperatorCaption({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Text(
+        name.trim().isEmpty ? 'Usuario: registro historico' : 'Usuario: $name',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: mutedColor,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _ReadingMetricsWithPressure extends StatelessWidget {
+  const _ReadingMetricsWithPressure({
+    required this.pressurePsi,
+    required this.children,
+  });
+
+  final double? pressurePsi;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final pressure = pressurePsi == null
+        ? 'PSI s/d'
+        : '${Formats.noDecimal(pressurePsi!)} PSI';
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: Row(children: children)),
+          const SizedBox(width: 8),
+          RotatedBox(
+            quarterTurns: 3,
+            child: Text(
+              pressure,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: mutedColor.withValues(alpha: 0.72),
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

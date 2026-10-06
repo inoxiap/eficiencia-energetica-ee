@@ -10,6 +10,18 @@ abstract class ConsumptionStore {
   Future<void> saveReading(BoilerReading reading);
 }
 
+class ConsumptionPage {
+  const ConsumptionPage({required this.readings, required this.hasMore});
+
+  final List<BoilerReading> readings;
+  final bool hasMore;
+}
+
+abstract class PagedConsumptionStore {
+  Future<ConsumptionPage> loadFirstPage({int limit = 100});
+  Future<ConsumptionPage> loadNextPage({int limit = 100});
+}
+
 class ConsumptionSyncException implements Exception {
   const ConsumptionSyncException(this.message);
 
@@ -28,7 +40,8 @@ class DuplicateBoilerReadingException implements Exception {
   String toString() => message;
 }
 
-class HybridConsumptionStore implements ConsumptionStore {
+class HybridConsumptionStore
+    implements ConsumptionStore, PagedConsumptionStore {
   const HybridConsumptionStore({
     required this.localStore,
     required this.remoteStore,
@@ -38,6 +51,49 @@ class HybridConsumptionStore implements ConsumptionStore {
   final ConsumptionStore localStore;
   final ConsumptionStore remoteStore;
   final Duration remoteTimeout;
+
+  @override
+  Future<ConsumptionPage> loadFirstPage({int limit = 100}) async {
+    var localReadings = await localStore.loadReadings();
+    await _retryPendingReadings(localReadings);
+    localReadings = await localStore.loadReadings();
+    final pagedRemote = remoteStore is PagedConsumptionStore
+        ? remoteStore as PagedConsumptionStore
+        : null;
+    if (pagedRemote == null) {
+      final readings = await loadReadings();
+      return ConsumptionPage(readings: readings, hasMore: false);
+    }
+    try {
+      final page = await pagedRemote
+          .loadFirstPage(limit: limit)
+          .timeout(remoteTimeout);
+      return ConsumptionPage(
+        readings: _mergeReadings(page.readings, localReadings),
+        hasMore: page.hasMore,
+      );
+    } catch (_) {
+      return ConsumptionPage(readings: localReadings, hasMore: false);
+    }
+  }
+
+  @override
+  Future<ConsumptionPage> loadNextPage({int limit = 100}) async {
+    final pagedRemote = remoteStore is PagedConsumptionStore
+        ? remoteStore as PagedConsumptionStore
+        : null;
+    if (pagedRemote == null) {
+      return const ConsumptionPage(readings: [], hasMore: false);
+    }
+    try {
+      final page = await pagedRemote
+          .loadNextPage(limit: limit)
+          .timeout(remoteTimeout);
+      return page;
+    } catch (_) {
+      return const ConsumptionPage(readings: [], hasMore: false);
+    }
+  }
 
   @override
   Future<List<BoilerReading>> loadReadings() async {

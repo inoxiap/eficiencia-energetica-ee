@@ -12,6 +12,8 @@ BoilerReading _reading({
   int revision = 1,
   String? rootRecordId,
   Map<String, dynamic> originalInputs = const {},
+  double? pressurePsi,
+  String operatorName = '',
 }) => BoilerReading(
   id: id,
   recordedAt: at,
@@ -26,6 +28,8 @@ BoilerReading _reading({
   steamConsumption: null,
   revision: revision,
   rootRecordId: rootRecordId,
+  boilerPressurePsi: pressurePsi,
+  createdByNameSnapshot: operatorName,
   originalInputs: originalInputs,
 );
 
@@ -76,6 +80,30 @@ void main() {
       closeTo((24 + 288 * 48 / 142) * alfaSteamNormalizedMultiplier, 0.0001),
     );
     expect(result[2].bunkerGallons, closeTo(9, 0.0001));
+  });
+
+  test('carries pressure and latest operator into normalized hours', () {
+    final result = BoilerHourlyNormalizer.normalize([
+      _reading(
+        id: 'first',
+        at: DateTime.utc(2026, 10, 5, 14),
+        bunker: 100,
+        water: 20,
+        pressurePsi: 110,
+        operatorName: 'Ana',
+      ),
+      _reading(
+        id: 'second',
+        at: DateTime.utc(2026, 10, 5, 15),
+        bunker: 120,
+        water: 30,
+        pressurePsi: 155,
+        operatorName: 'Luis',
+      ),
+    ]);
+
+    expect(result.single.boilerPressurePsi, 155);
+    expect(result.single.operatorName, 'Luis');
   });
 
   test(

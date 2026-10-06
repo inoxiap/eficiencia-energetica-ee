@@ -5,7 +5,8 @@ import 'consumption_store.dart';
 import 'firestore_consumption_store.dart';
 import 'operator_session.dart';
 
-class DeferredFirestoreConsumptionStore implements ConsumptionStore {
+class DeferredFirestoreConsumptionStore
+    implements ConsumptionStore, PagedConsumptionStore {
   DeferredFirestoreConsumptionStore({
     required Future<FirebaseApp> firebaseReady,
     required OperatorSession operatorSession,
@@ -28,6 +29,16 @@ class DeferredFirestoreConsumptionStore implements ConsumptionStore {
   @override
   Future<List<BoilerReading>> loadReadings() async {
     return (await _remote).loadReadings();
+  }
+
+  @override
+  Future<ConsumptionPage> loadFirstPage({int limit = 100}) async {
+    return (await _remote).loadFirstPage(limit: limit);
+  }
+
+  @override
+  Future<ConsumptionPage> loadNextPage({int limit = 100}) async {
+    return (await _remote).loadNextPage(limit: limit);
   }
 
   @override

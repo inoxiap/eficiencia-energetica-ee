@@ -739,13 +739,16 @@ class _SteamTrapEntryPanelState extends State<SteamTrapEntryPanel> {
   Future<void> _ensureReservation() async {
     if (_recordId != null && _tag != null) return;
     final section = plantSectionByCode(_sectionCode)!;
-    final recordId = _recordId ??
+    final recordId =
+        _recordId ??
         '${DateTime.now().millisecondsSinceEpoch}-${math.Random().nextInt(1 << 31).toRadixString(16)}';
+    // Keep the same ID across network retries. If Firestore committed just
+    // before a timeout, the transaction can safely resume the same draft.
+    _recordId ??= recordId;
     final record = await widget.store.reserveTag(
       recordId: recordId,
       section: section,
     );
-    _recordId = recordId;
     _tag = record.tag;
   }
 
@@ -840,10 +843,13 @@ class _SteamTrapEntryPanelState extends State<SteamTrapEntryPanel> {
         } catch (_) {}
       }
       if (!mounted) return;
+      final message = error is TimeoutException
+          ? 'La conexion con Firebase tardo demasiado. Tus datos siguen en el formulario; verifica la señal y vuelve a guardar.'
+          : error.toString().replaceFirst('Exception: ', '');
       setState(() {
         _busy = false;
         _messageType = MessageType.error;
-        _message = error.toString().replaceFirst('Exception: ', '');
+        _message = message;
       });
     }
   }

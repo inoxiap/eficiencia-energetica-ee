@@ -6,8 +6,9 @@ import '../domain/boiler_consumption.dart';
 import 'consumption_store.dart';
 import 'operator_session.dart';
 
-class FirestoreConsumptionStore implements ConsumptionStore {
-  static const recentReadingLimit = 250;
+class FirestoreConsumptionStore
+    implements ConsumptionStore, PagedConsumptionStore {
+  static const readingPageSize = 250;
 
   FirestoreConsumptionStore({
     required OperatorSession operatorSession,
@@ -19,27 +20,59 @@ class FirestoreConsumptionStore implements ConsumptionStore {
   final FirebaseFirestore _firestore;
   final OperatorSession _operatorSession;
   final Duration timeout;
+  DocumentSnapshot<Map<String, dynamic>>? _lastDocument;
+  bool _hasMore = true;
 
   CollectionReference<Map<String, dynamic>> get _readings =>
       _firestore.collection('boiler_consumption_readings');
 
   @override
   Future<List<BoilerReading>> loadReadings() async {
+    final readings = <BoilerReading>[];
+    var page = await loadFirstPage(limit: readingPageSize);
+    readings.addAll(page.readings);
+    while (page.hasMore) {
+      page = await loadNextPage(limit: readingPageSize);
+      readings.addAll(page.readings);
+    }
+    return readings;
+  }
+
+  @override
+  Future<ConsumptionPage> loadFirstPage({int limit = 100}) async {
+    _lastDocument = null;
+    _hasMore = true;
+    return _loadPage(limit);
+  }
+
+  @override
+  Future<ConsumptionPage> loadNextPage({int limit = 100}) async {
+    if (!_hasMore) {
+      return const ConsumptionPage(readings: [], hasMore: false);
+    }
+    return _loadPage(limit);
+  }
+
+  Future<ConsumptionPage> _loadPage(int limit) async {
     final operator = await _operatorSession.currentOperator();
     if (operator == null) {
       throw const ConsumptionSyncException(
         'Inicia sesion como usuario antes de consultar lecturas.',
       );
     }
-    final snapshot = await _readings
-        .orderBy('recordedAt', descending: true)
-        .limit(recentReadingLimit)
-        .get();
-    return snapshot.docs.map((doc) {
+    var query = _readings.orderBy('recordedAt', descending: true).limit(limit);
+    if (_lastDocument != null) {
+      query = query.startAfterDocument(_lastDocument!);
+    }
+    final snapshot = await query.get();
+    _lastDocument = snapshot.docs.isEmpty ? _lastDocument : snapshot.docs.last;
+    _hasMore = snapshot.docs.length == limit;
+    final readings = snapshot.docs.map((doc) {
       final data = doc.data();
       data['id'] = data['id'] ?? doc.id;
       return BoilerReading.fromJson(data);
     }).toList();
+    return ConsumptionPage(readings: readings, hasMore: _hasMore);
   }
 
   @override

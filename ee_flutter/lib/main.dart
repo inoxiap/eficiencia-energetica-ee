@@ -46,6 +46,7 @@ import 'services/operator_auth_service.dart';
 import 'services/operator_admin_service.dart';
 import 'services/pressure_reading_store.dart';
 import 'services/push_notification_service.dart';
+import 'services/local_consumption_alert_service.dart';
 import 'services/report_store.dart';
 import 'services/pump_survey_store.dart';
 import 'services/trap_sizing_report_store.dart';
@@ -93,6 +94,17 @@ Future<void> main() async {
   final localStore = LocalReportStore();
   final localConsumptionStore = LocalConsumptionStore();
   final operatorSession = FirebaseOperatorSession(firebaseReady: firebaseReady);
+  final consumptionStore = HybridConsumptionStore(
+    localStore: localConsumptionStore,
+    remoteStore: DeferredFirestoreConsumptionStore(
+      firebaseReady: firebaseReady,
+      operatorSession: operatorSession,
+    ),
+    remoteTimeout: const Duration(seconds: 35),
+  );
+  LocalConsumptionAlertService(
+    consumptionStore: consumptionStore,
+  ).initialize().ignore();
   PushNotificationService(
     firebaseReady: firebaseReady,
     operatorSession: operatorSession,
@@ -113,14 +125,7 @@ Future<void> main() async {
           operatorSession: operatorSession,
         ),
       ),
-      consumptionStore: HybridConsumptionStore(
-        localStore: localConsumptionStore,
-        remoteStore: DeferredFirestoreConsumptionStore(
-          firebaseReady: firebaseReady,
-          operatorSession: operatorSession,
-        ),
-        remoteTimeout: const Duration(seconds: 35),
-      ),
+      consumptionStore: consumptionStore,
       pressureReadingStore: FirebasePressureReadingStore(
         firebaseReady: firebaseReady,
         operatorSession: operatorSession,
