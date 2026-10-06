@@ -45,6 +45,7 @@ import 'services/maintenance_report_store.dart';
 import 'services/operator_auth_service.dart';
 import 'services/operator_admin_service.dart';
 import 'services/pressure_reading_store.dart';
+import 'services/push_notification_service.dart';
 import 'services/report_store.dart';
 import 'services/pump_survey_store.dart';
 import 'services/trap_sizing_report_store.dart';
@@ -92,6 +93,10 @@ Future<void> main() async {
   final localStore = LocalReportStore();
   final localConsumptionStore = LocalConsumptionStore();
   final operatorSession = FirebaseOperatorSession(firebaseReady: firebaseReady);
+  PushNotificationService(
+    firebaseReady: firebaseReady,
+    operatorSession: operatorSession,
+  ).initialize().ignore();
   final operatorAuthService = FirebaseOperatorAuthService(
     firebaseReady: firebaseReady,
   );

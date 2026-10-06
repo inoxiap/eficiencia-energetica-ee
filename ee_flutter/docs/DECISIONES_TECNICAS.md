@@ -49,7 +49,10 @@ La cedula+PIN se resuelve directamente con Firebase Authentication usando el
 proveedor correo/contrasena. La app deriva una direccion tecnica estable de la
 cedula y adapta el PIN al minimo de Firebase sin mostrar correo al operador.
 Firebase Auth conserva la sesion y el registro publico siempre crea `operator`.
-Esta decision elimina Cloud Functions y mantiene compatibilidad con Spark.
+La autenticacion principal sigue funcionando sin Cloud Functions y conserva
+compatibilidad con Spark. Las alarmas push de consumos son una excepcion:
+requieren una Cloud Function y, por tanto, el proyecto debe pasar a Blaze para
+que Firebase pueda procesar lecturas y enviar FCM aun con la app cerrada.
 
 El PIN corto ofrece seguridad limitada por definicion; es una decision
 consciente para uso interno de pocos operadores. No se guarda PIN en Firestore

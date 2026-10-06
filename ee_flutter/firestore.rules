@@ -452,6 +452,24 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /notification_tokens/{document} {
+      allow create, update: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.token is string
+        && request.resource.data.platform == 'android'
+        && request.resource.data.active is bool;
+      allow read, delete: if isAdmin()
+        || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+
+    match /boiler_consumption_alerts/{document} {
+      allow read: if isAdmin()
+        || (signedIn()
+          && resource.data.recipientUids is list
+          && request.auth.uid in resource.data.recipientUids);
+      allow write: if false;
+    }
+
     match /audit_logs/{document} {
       allow read: if isAdmin();
       allow write: if false;

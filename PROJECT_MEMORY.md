@@ -2007,6 +2007,25 @@ Su pendiente sobre `PASSWORD_LOGIN_DISABLED` quedo resuelto el 2026-07-16.
   por cada hora que supere el limite. Aun no se implementaron notificaciones;
   falta confirmar la frontera operativa y registrar tokens/permisos de FCM.
 
+### 2026-10-06 - Implementacion local de alarmas de bunker
+
+- Resultado local: se agrego registro de tokens Android mediante Firebase Cloud
+  Messaging, permiso `POST_NOTIFICATIONS`, reglas restrictivas para
+  `notification_tokens` y una funcion `alertOnNormalizedBoilerConsumption`.
+  La funcion prorratea el delta de bunker en las horas cerradas, aplica los
+  umbrales por caldera/presion y deduplica por caldera y hora en
+  `boiler_consumption_alerts`.
+- Destinatarios configurados: el usuario de Jeff y el usuario administrador
+  creado en la publicacion anterior. No se guardan PIN ni secretos en codigo o
+  documentacion.
+- Pruebas: build TypeScript de Functions aprobado; 5 pruebas de credenciales,
+  25 pruebas de reglas con Firestore Emulator y 69 pruebas Flutter aprobadas;
+  `flutter analyze --no-pub` sin hallazgos.
+- Bloqueo de despliegue: Firebase rechazo `firebase deploy --only functions`
+  porque el proyecto esta en Spark y necesita Blaze para habilitar Cloud
+  Functions/Artifact Registry. No se activo facturacion ni se publico la
+  alerta en produccion.
+
 ## Plantilla para futuras entradas
 
 ```markdown
